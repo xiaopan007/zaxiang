@@ -107,14 +107,15 @@ exec $(shell_quote "$script_path") \"\$@\"
 }
 
 self_update() {
-  local script_path temp_path
+  local script_path temp_path update_url
   script_path="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
   temp_path="${script_path}.new"
+  update_url="${SELF_UPDATE_URL}?t=$(date +%s)"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$SELF_UPDATE_URL" -o "$temp_path"
+    curl -fsSL -H "Cache-Control: no-cache" "$update_url" -o "$temp_path"
   elif command -v wget >/dev/null 2>&1; then
-    wget -qO "$temp_path" "$SELF_UPDATE_URL"
+    wget --header="Cache-Control: no-cache" -qO "$temp_path" "$update_url"
   else
     echo "更新失败：未找到 curl 或 wget。"
     return 1

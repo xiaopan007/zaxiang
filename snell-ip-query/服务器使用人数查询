@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections import Counter
@@ -126,7 +127,15 @@ def ensure_shortcut_installed():
 def self_update():
     script_path = os.path.abspath(sys.argv[0])
     temp_path = script_path + ".new"
-    request = urllib.request.Request(SELF_UPDATE_URL, headers={"User-Agent": "snell-usage-counter-updater/1.0"})
+    update_url = SELF_UPDATE_URL + ("&" if "?" in SELF_UPDATE_URL else "?") + "t=" + str(int(time.time()))
+    request = urllib.request.Request(
+        update_url,
+        headers={
+            "User-Agent": "snell-usage-counter-updater/1.0",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
 
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
