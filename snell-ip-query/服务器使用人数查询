@@ -26,6 +26,10 @@ COMMON_CONFIG_PATHS = (
 
 SHORTCUT_NAME = os.environ.get("SNELL_QUERY_SHORTCUT", "c")
 SHORTCUT_PATH = os.environ.get("SNELL_QUERY_SHORTCUT_PATH", "/usr/local/bin/c")
+SELF_UPDATE_URL = os.environ.get(
+    "SNELL_QUERY_UPDATE_URL",
+    "https://raw.githubusercontent.com/xiaopan007/zaxiang/main/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2",
+)
 
 
 def run_command(args):
@@ -117,6 +121,32 @@ def ensure_shortcut_installed():
         append_alias_once(profile_path, script_path, SHORTCUT_NAME)
 
     install_shortcut_command(script_path, SHORTCUT_PATH)
+
+
+def self_update():
+    script_path = os.path.abspath(sys.argv[0])
+    temp_path = script_path + ".new"
+    request = urllib.request.Request(SELF_UPDATE_URL, headers={"User-Agent": "snell-usage-counter-updater/1.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            data = response.read()
+        with open(temp_path, "wb") as f:
+            f.write(data)
+        os.chmod(temp_path, 0o755)
+        os.replace(temp_path, script_path)
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+        print("更新失败：" + str(exc))
+        return 1
+
+    print("更新完成，正在重新启动脚本...")
+    os.execv(script_path, [script_path])
+    return 0
 
 
 def strip_inline_comment(line):
@@ -692,6 +722,13 @@ def print_summary(port):
         print(line)
 
 
+def refresh_screen():
+    if sys.stdout.isatty() and os.environ.get("TERM") and shutil.which("clear"):
+        subprocess.call(["clear"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        print()
+
+
 def show_menu(port):
     while True:
         print()
@@ -701,18 +738,20 @@ def show_menu(port):
         print("0. 退出脚本")
         choice = input("请选择：").strip().lower()
 
+        if choice == "00":
+            return self_update()
         if choice in ("0", "q", "quit", "exit"):
             return 0
         if choice == "1":
-            print()
+            refresh_screen()
             query_ip_details(port)
             continue
         if choice == "2":
-            print()
+            refresh_screen()
             block_by_ip(port)
             continue
         if choice == "3":
-            print()
+            refresh_screen()
             unblock_by_ip(port)
             continue
 

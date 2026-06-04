@@ -1,0 +1,39 @@
+# VPS 优化脚本
+
+用于 Ubuntu/Debian VPS 的常用优化和防火墙管理。
+
+## 一键安装并运行
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/xiaopan007/zaxiang/main/vps-optimizer/install.sh)"
+```
+
+安装后可直接运行：
+
+```bash
+v
+```
+
+或：
+
+```bash
+/root/vps优化脚本.sh
+```
+
+## 菜单
+
+```text
+1. 优化 VPS
+2. 防火墙管理
+3. 加入放行端口
+4. 删除放行端口
+0. 退出脚本
+```
+
+主菜单输入：
+
+```text
+00
+```
+
+会从 GitHub 下载最新版脚本并自动重启，便于测试更新。
