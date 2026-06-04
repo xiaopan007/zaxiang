@@ -16,6 +16,8 @@ class SnellUsageQueryTests(unittest.TestCase):
     def test_location_and_isp_display_are_compact_chinese(self):
         self.assertEqual(MODULE.normalize_location("中国", "河北省", "石家庄市"), "河北石家庄")
         self.assertEqual(MODULE.normalize_location("中国", "上海市", "上海"), "上海")
+        self.assertEqual(MODULE.normalize_location("中国", "江西", "Taohua"), "江西南昌")
+        self.assertEqual(MODULE.normalize_location("中国", "广东", "UnknownCity"), "广东")
         self.assertEqual(MODULE.normalize_location("美国", "加州", "洛杉矶"), "美国加州洛杉矶")
         self.assertEqual(MODULE.normalize_isp("China Mobile Communications Corporation"), "移动")
         self.assertEqual(MODULE.normalize_isp("CNC Group CHINA169 Hebei Province Network"), "联通")

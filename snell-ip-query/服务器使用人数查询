@@ -32,6 +32,10 @@ SELF_UPDATE_URL = os.environ.get(
     "https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main",
 )
 
+CHINA_CITY_ALIASES = {
+    ("江西", "Taohua"): "南昌",
+}
+
 
 def run_command(args):
     try:
@@ -615,7 +619,7 @@ def normalize_location(country, region, city):
     region = (region or "").strip()
     city = (city or "").strip()
     province = normalize_area_name(region)
-    city_name = normalize_area_name(city)
+    city_name = normalize_china_city_name(country, province, city)
 
     location = ""
     if province and city_name and province != city_name:
@@ -630,6 +634,22 @@ def normalize_location(country, region, city):
     if location:
         return location
     return "地区未知"
+
+
+def normalize_china_city_name(country, province, city):
+    city_name = normalize_area_name(city)
+
+    if country not in ("中国", "中华人民共和国"):
+        return city_name
+
+    alias = CHINA_CITY_ALIASES.get((province, city_name))
+    if alias:
+        return alias
+
+    if re.search(r"[A-Za-z]", city_name):
+        return ""
+
+    return city_name
 
 
 def normalize_area_name(value):
