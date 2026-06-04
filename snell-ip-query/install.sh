@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_URL="https://github.com/xiaopan007/zaxiang/raw/refs/heads/main/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2"
+SCRIPT_URL="https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main"
 SCRIPT_PATH="/root/服务器使用人数查询"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -10,9 +10,9 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_PATH"
+  curl -fsSL -H "Accept: application/vnd.github.raw" "$SCRIPT_URL" -o "$SCRIPT_PATH"
 elif command -v wget >/dev/null 2>&1; then
-  wget -qO "$SCRIPT_PATH" "$SCRIPT_URL"
+  wget --header="Accept: application/vnd.github.raw" -qO "$SCRIPT_PATH" "$SCRIPT_URL"
 else
   echo "未找到 curl 或 wget，无法下载脚本。"
   exit 1

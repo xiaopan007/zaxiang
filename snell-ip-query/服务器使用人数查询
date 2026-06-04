@@ -29,7 +29,7 @@ SHORTCUT_NAME = os.environ.get("SNELL_QUERY_SHORTCUT", "c")
 SHORTCUT_PATH = os.environ.get("SNELL_QUERY_SHORTCUT_PATH", "/usr/local/bin/c")
 SELF_UPDATE_URL = os.environ.get(
     "SNELL_QUERY_UPDATE_URL",
-    "https://github.com/xiaopan007/zaxiang/raw/refs/heads/main/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2",
+    "https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main",
 )
 
 
@@ -132,6 +132,7 @@ def self_update():
         update_url,
         headers={
             "User-Agent": "snell-usage-counter-updater/1.0",
+            "Accept": "application/vnd.github.raw",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
         },
