@@ -5,7 +5,7 @@
 ## 一键安装并运行
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/xiaopan007/zaxiang/main/snell-ip-query/install.sh)"
+bash -c "$(curl -fsSL https://github.com/xiaopan007/zaxiang/raw/refs/heads/main/snell-ip-query/install.sh)"
 ```
 
 安装后可直接运行：

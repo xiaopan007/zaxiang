@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_URL="https://raw.githubusercontent.com/xiaopan007/zaxiang/main/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2"
+SCRIPT_URL="https://github.com/xiaopan007/zaxiang/raw/refs/heads/main/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2"
 SCRIPT_PATH="/root/服务器使用人数查询"
 
 if [ "$(id -u)" -ne 0 ]; then

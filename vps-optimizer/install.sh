@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-SCRIPT_URL="https://raw.githubusercontent.com/xiaopan007/zaxiang/main/vps-optimizer/vps%E4%BC%98%E5%8C%96%E8%84%9A%E6%9C%AC.sh"
+SCRIPT_URL="https://github.com/xiaopan007/zaxiang/raw/refs/heads/main/vps-optimizer/vps%E4%BC%98%E5%8C%96%E8%84%9A%E6%9C%AC.sh"
 SCRIPT_PATH="/root/vps优化脚本.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
