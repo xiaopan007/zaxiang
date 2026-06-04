@@ -736,6 +736,7 @@ def show_menu(port):
         print("2. 按 IP 封禁")
         print("3. 解除 IP 封禁")
         print("0. 退出脚本")
+        print("00. 更新脚本")
         choice = input("请选择：").strip().lower()
 
         if choice == "00":

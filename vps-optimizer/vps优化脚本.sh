@@ -664,6 +664,7 @@ main_menu() {
     echo "3. 加入放行端口"
     echo "4. 删除放行端口"
     echo "0. 退出脚本"
+    echo "00. 更新脚本"
     local choice
     read -r -p "请选择：" choice
 
