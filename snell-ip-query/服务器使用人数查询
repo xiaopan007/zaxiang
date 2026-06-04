@@ -754,7 +754,7 @@ def print_summary(port):
 
 def refresh_screen():
     if sys.stdout.isatty() and os.environ.get("TERM") and shutil.which("clear"):
-        subprocess.call(["clear"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.call(["clear"], stderr=subprocess.DEVNULL)
     else:
         print()
 
