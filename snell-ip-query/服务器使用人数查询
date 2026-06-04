@@ -742,6 +742,7 @@ def show_menu(port):
         if choice == "00":
             return self_update()
         if choice in ("0", "q", "quit", "exit"):
+            refresh_screen()
             return 0
         if choice == "1":
             refresh_screen()

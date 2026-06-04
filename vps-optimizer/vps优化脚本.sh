@@ -679,7 +679,7 @@ main_menu() {
       2) refresh_screen; firewall_menu ;;
       3) refresh_screen; allow_port ;;
       4) refresh_screen; delete_allowed_port ;;
-      0) exit 0 ;;
+      0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
   done
