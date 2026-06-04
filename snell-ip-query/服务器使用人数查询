@@ -32,10 +32,6 @@ SELF_UPDATE_URL = os.environ.get(
     "https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main",
 )
 
-CHINA_CITY_ALIASES = {
-    ("江西", "Taohua"): "南昌",
-}
-
 
 def run_command(args):
     try:
@@ -460,9 +456,34 @@ def lookup_location_and_isp(ip):
     region = data.get("regionName") or ""
     city = data.get("city") or ""
     location = normalize_location(country, region, city)
+    if needs_china_location_fallback(country, region, city):
+        fallback_location = lookup_pconline_location(ip)
+        if fallback_location != "地区未知":
+            location = fallback_location
     isp = normalize_isp(data.get("isp") or data.get("org") or data.get("as") or "")
 
     return (location, isp)
+
+
+def lookup_pconline_location(ip):
+    url = "https://whois.pconline.com.cn/ipJson.jsp?json=true&ip=" + ip
+    request = urllib.request.Request(url, headers={"User-Agent": "snell-usage-counter/2.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=IP_API_TIMEOUT) as response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError):
+        return "地区未知"
+
+    for encoding in ("utf-8", "gbk"):
+        try:
+            text = raw.decode(encoding)
+            data = json.loads(text.strip())
+            return normalize_pconline_location(data)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+
+    return "地区未知"
 
 
 def get_active_ip_details(port):
@@ -636,15 +657,38 @@ def normalize_location(country, region, city):
     return "地区未知"
 
 
+def needs_china_location_fallback(country, region, city):
+    country = normalize_area_name((country or "").strip())
+    province = normalize_area_name((region or "").strip())
+    city_name = normalize_area_name((city or "").strip())
+
+    if country not in ("中国", "中华人民共和国"):
+        return False
+    if not province:
+        return False
+    if not city_name:
+        return True
+    return bool(re.search(r"[A-Za-z]", city_name))
+
+
+def normalize_pconline_location(data):
+    province = normalize_area_name((data.get("pro") or "").strip())
+    city = normalize_area_name((data.get("city") or "").strip())
+
+    if province and city and province != city:
+        return province + city
+    if city:
+        return city
+    if province:
+        return province
+    return "地区未知"
+
+
 def normalize_china_city_name(country, province, city):
     city_name = normalize_area_name(city)
 
     if country not in ("中国", "中华人民共和国"):
         return city_name
-
-    alias = CHINA_CITY_ALIASES.get((province, city_name))
-    if alias:
-        return alias
 
     if re.search(r"[A-Za-z]", city_name):
         return ""

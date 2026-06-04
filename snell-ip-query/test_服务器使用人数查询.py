@@ -16,7 +16,7 @@ class SnellUsageQueryTests(unittest.TestCase):
     def test_location_and_isp_display_are_compact_chinese(self):
         self.assertEqual(MODULE.normalize_location("中国", "河北省", "石家庄市"), "河北石家庄")
         self.assertEqual(MODULE.normalize_location("中国", "上海市", "上海"), "上海")
-        self.assertEqual(MODULE.normalize_location("中国", "江西", "Taohua"), "江西南昌")
+        self.assertEqual(MODULE.normalize_location("中国", "江西", "Taohua"), "江西")
         self.assertEqual(MODULE.normalize_location("中国", "广东", "UnknownCity"), "广东")
         self.assertEqual(MODULE.normalize_location("美国", "加州", "洛杉矶"), "美国加州洛杉矶")
         self.assertEqual(MODULE.normalize_isp("China Mobile Communications Corporation"), "移动")
@@ -24,6 +24,12 @@ class SnellUsageQueryTests(unittest.TestCase):
         self.assertEqual(MODULE.normalize_isp("DMIT Cloud Services"), "DMIT云")
         self.assertEqual(MODULE.normalize_isp("OVH SAS"), "OVH")
         self.assertEqual(MODULE.format_summary_line(("河北石家庄", "电信"), 2), "河北石家庄电信：2")
+
+    def test_china_fallback_location_uses_chinese_ip_database_shape(self):
+        data = {"pro": "江西省", "city": "南昌市", "addr": "江西省南昌市 电信"}
+
+        self.assertTrue(MODULE.needs_china_location_fallback("中国", "江西", "Taohua"))
+        self.assertEqual(MODULE.normalize_pconline_location(data), "江西南昌")
 
     def test_ufw_block_commands_use_insert_before_allow_rules(self):
         commands = MODULE.build_block_commands("1.2.3.4", "49376", "ufw")
