@@ -1,7 +1,10 @@
 import importlib.util
 import importlib.machinery
+import io
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from unittest import mock
 from pathlib import Path
 
 
@@ -73,6 +76,47 @@ class SnellUsageQueryTests(unittest.TestCase):
                 "河北石家庄电信 106.119.211.135 当前连接数：7",
             ],
         )
+
+    def test_filter_blocked_ip_details_hides_already_blocked_users(self):
+        details = {
+            "1.2.3.4": {"location": "河北石家庄", "isp": "电信", "connections": 31},
+            "5.6.7.8": {"location": "江苏无锡", "isp": "移动", "connections": 8},
+        }
+        blocked = {"1.2.3.4": {"rules": [1, 2], "protocols": ["tcp", "udp"]}}
+
+        self.assertEqual(MODULE.filter_blocked_ip_details(details, blocked), {"5.6.7.8": details["5.6.7.8"]})
+
+    def test_conntrack_cleanup_commands_are_limited_to_selected_ip_and_port(self):
+        commands = MODULE.build_conntrack_cleanup_commands("1.2.3.4", "49376")
+
+        self.assertEqual(
+            commands,
+            [
+                ["conntrack", "-D", "-s", "1.2.3.4", "-p", "tcp", "--dport", "49376"],
+                ["conntrack", "-D", "-s", "1.2.3.4", "-p", "udp", "--dport", "49376"],
+            ],
+        )
+
+    def test_block_menu_blocks_without_confirmation_and_refreshes_list(self):
+        first_details = {
+            "1.2.3.4": {"location": "河北石家庄", "isp": "电信", "connections": 31},
+            "5.6.7.8": {"location": "江苏无锡", "isp": "移动", "connections": 8},
+        }
+        second_details = {"5.6.7.8": first_details["5.6.7.8"]}
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "get_visible_ip_details", side_effect=[first_details, second_details]), \
+            mock.patch.object(MODULE, "run_block_commands", return_value=(True, "已封禁：1.2.3.4")) as run_block, \
+            mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch.object(MODULE.time, "sleep"), \
+            mock.patch("builtins.input", side_effect=["1", "0"]), \
+            redirect_stdout(output):
+            MODULE.block_by_ip("49376")
+
+        run_block.assert_called_once_with("1.2.3.4", "49376")
+        self.assertNotIn("确认封禁", output.getvalue())
+        self.assertIn("1. 河北石家庄电信 1.2.3.4 当前连接数：31", output.getvalue())
+        self.assertIn("1. 江苏无锡移动 5.6.7.8 当前连接数：8", output.getvalue())
 
     def test_parse_ufw_denies_groups_tcp_and_udp_by_ip(self):
         output = """

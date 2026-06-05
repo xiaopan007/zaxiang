@@ -503,6 +503,17 @@ def get_active_ip_details(port):
     return details
 
 
+def get_visible_ip_details(port):
+    details = get_active_ip_details(port)
+    blocked_entries = get_blocked_ip_entries(port)
+    return filter_blocked_ip_details(details, blocked_entries)
+
+
+def filter_blocked_ip_details(details, blocked_entries):
+    blocked_ips = set(blocked_entries)
+    return {ip: detail for ip, detail in details.items() if ip not in blocked_ips}
+
+
 def format_summary_line(location_and_isp, count):
     location, isp = location_and_isp
     return location + isp + "：" + str(count)
@@ -605,7 +616,23 @@ def run_block_commands(ip, port):
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False, "封禁命令执行失败：" + " ".join(command)
 
+    cleanup_existing_connections(ip, port)
     return True, "已封禁：" + ip
+
+
+def build_conntrack_cleanup_commands(ip, port):
+    return [
+        ["conntrack", "-D", "-s", ip, "-p", "tcp", "--dport", str(port)],
+        ["conntrack", "-D", "-s", ip, "-p", "udp", "--dport", str(port)],
+    ]
+
+
+def cleanup_existing_connections(ip, port):
+    if not shutil.which("conntrack"):
+        return
+
+    for command in build_conntrack_cleanup_commands(ip, port):
+        subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def get_blocked_ip_entries(port):
@@ -780,7 +807,7 @@ def main():
 
 
 def print_summary(port):
-    details = get_active_ip_details(port)
+    details = get_visible_ip_details(port)
 
     shanghai_tz = timezone(timedelta(hours=8))
     now = datetime.now(shanghai_tz).strftime("%Y-%m-%d %H:%M:%S")
@@ -848,36 +875,31 @@ def query_ip_details(port):
 
 
 def block_by_ip(port):
-    details = get_active_ip_details(port)
-    if not details:
-        print("当前没有可封禁的公网 IP")
-        wait_return()
-        return
+    while True:
+        details = get_visible_ip_details(port)
+        if not details:
+            print("当前没有可封禁的公网 IP")
+            wait_return()
+            return
 
-    sorted_ips = [ip for ip, _detail in sorted_ip_details(details)]
-    for line in format_block_menu_lines(details):
-        print(line)
+        sorted_ips = [ip for ip, _detail in sorted_ip_details(details)]
+        for line in format_block_menu_lines(details):
+            print(line)
 
-    selected = input("输入要封禁的序号，0 返回上一级菜单：").strip()
-    if selected == "0":
-        return
-    if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
-        print("无效序号")
-        wait_return()
-        return
+        selected = input("输入要封禁的序号，0 返回上一级菜单：").strip()
+        if selected == "0":
+            return
+        if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
+            print("无效序号")
+            wait_return()
+            refresh_screen()
+            continue
 
-    ip = sorted_ips[int(selected) - 1]
-    detail = details[ip]
-    label = detail["location"] + detail["isp"]
-    confirm = input("确认封禁 " + label + " " + ip + "？输入 y 确认：").strip().lower()
-    if confirm != "y":
-        print("已取消")
-        wait_return()
-        return
-
-    _ok, message = run_block_commands(ip, port)
-    print(message)
-    wait_return()
+        ip = sorted_ips[int(selected) - 1]
+        _ok, message = run_block_commands(ip, port)
+        print(message)
+        time.sleep(1)
+        refresh_screen()
 
 
 def unblock_by_ip(port):
