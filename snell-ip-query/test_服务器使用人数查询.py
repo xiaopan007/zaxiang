@@ -118,6 +118,32 @@ class SnellUsageQueryTests(unittest.TestCase):
         self.assertIn("1. 河北石家庄电信 1.2.3.4 当前连接数：31", output.getvalue())
         self.assertIn("1. 江苏无锡移动 5.6.7.8 当前连接数：8", output.getvalue())
 
+    def test_unblock_menu_unblocks_without_confirmation_and_refreshes_list(self):
+        first_blocked = {
+            "1.2.3.4": {"rules": [1, 2], "protocols": ["tcp", "udp"]},
+            "5.6.7.8": {"rules": [3], "protocols": ["tcp"]},
+        }
+        second_blocked = {"5.6.7.8": first_blocked["5.6.7.8"]}
+        active_details = {
+            "1.2.3.4": {"location": "河北石家庄", "isp": "电信", "connections": 31},
+            "5.6.7.8": {"location": "江苏无锡", "isp": "移动", "connections": 8},
+        }
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "get_blocked_ip_entries", side_effect=[first_blocked, second_blocked]), \
+            mock.patch.object(MODULE, "get_active_ip_details", return_value=active_details), \
+            mock.patch.object(MODULE, "run_unblock_commands", return_value=(True, "已解除封禁")) as run_unblock, \
+            mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch.object(MODULE.time, "sleep"), \
+            mock.patch("builtins.input", side_effect=["1", "0"]), \
+            redirect_stdout(output):
+            MODULE.unblock_by_ip("49376")
+
+        run_unblock.assert_called_once_with(first_blocked["1.2.3.4"])
+        self.assertNotIn("确认解除封禁", output.getvalue())
+        self.assertIn("1. 河北石家庄电信 1.2.3.4 已封禁协议：tcp/udp", output.getvalue())
+        self.assertIn("1. 江苏无锡移动 5.6.7.8 已封禁协议：tcp", output.getvalue())
+
     def test_parse_ufw_denies_groups_tcp_and_udp_by_ip(self):
         output = """
 Status: active

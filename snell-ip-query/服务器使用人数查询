@@ -903,44 +903,41 @@ def block_by_ip(port):
 
 
 def unblock_by_ip(port):
-    blocked_entries = get_blocked_ip_entries(port)
-    if not blocked_entries:
-        print("当前没有这个 Snell 端口的封禁 IP")
-        wait_return()
-        return
+    while True:
+        blocked_entries = get_blocked_ip_entries(port)
+        if not blocked_entries:
+            print("当前没有这个 Snell 端口的封禁 IP")
+            wait_return()
+            return
 
-    active_details = get_active_ip_details(port)
-    sorted_ips = sorted(blocked_entries)
-    for index, ip in enumerate(sorted_ips, start=1):
-        detail = active_details.get(ip)
-        if detail:
-            label = detail["location"] + detail["isp"]
+        active_details = get_active_ip_details(port)
+        sorted_ips = sorted(blocked_entries)
+        for index, ip in enumerate(sorted_ips, start=1):
+            detail = active_details.get(ip)
+            if detail:
+                label = detail["location"] + detail["isp"]
+            else:
+                label = "地区未知运营商未知"
+            protocols = "/".join(blocked_entries[ip].get("protocols", []))
+            print(f"{index}. {label} {ip} 已封禁协议：{protocols}")
+
+        selected = input("输入要解除封禁的序号，0 返回上一级菜单：").strip()
+        if selected == "0":
+            return
+        if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
+            print("无效序号")
+            wait_return()
+            refresh_screen()
+            continue
+
+        ip = sorted_ips[int(selected) - 1]
+        ok, message = run_unblock_commands(blocked_entries[ip])
+        if ok:
+            print(message + "：" + ip)
         else:
-            label = "地区未知运营商未知"
-        protocols = "/".join(blocked_entries[ip].get("protocols", []))
-        print(f"{index}. {label} {ip} 已封禁协议：{protocols}")
-
-    selected = input("输入要解除封禁的序号，0 返回上一级菜单：").strip()
-    if selected == "0":
-        return
-    if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
-        print("无效序号")
-        wait_return()
-        return
-
-    ip = sorted_ips[int(selected) - 1]
-    confirm = input("确认解除封禁 " + ip + "？输入 y 确认：").strip().lower()
-    if confirm != "y":
-        print("已取消")
-        wait_return()
-        return
-
-    ok, message = run_unblock_commands(blocked_entries[ip])
-    if ok:
-        print(message + "：" + ip)
-    else:
-        print(message)
-    wait_return()
+            print(message)
+        time.sleep(1)
+        refresh_screen()
 
 if __name__ == "__main__":
     raise SystemExit(main())
