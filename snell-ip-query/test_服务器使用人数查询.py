@@ -211,6 +211,96 @@ Status: active
             self.assertTrue(MODULE.install_shortcut_command("/root/服务器使用人数查询", str(shortcut)))
             self.assertFalse(MODULE.install_shortcut_command("/root/服务器使用人数查询", str(shortcut)))
 
+    def test_source_key_ignores_ip_and_uses_location_and_isp(self):
+        self.assertEqual(MODULE.build_source_key("河北石家庄", "电信"), "河北石家庄|电信")
+
+    def test_scan_new_source_notification_initializes_existing_sources_silently(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            state_path = Path(temp_dir) / "state.json"
+            MODULE.save_monitor_config(
+                str(config_path),
+                {
+                    "server_name": "香港中转1",
+                    "telegram_bot_token": "token",
+                    "telegram_chat_id": "chat",
+                    "scan_interval": 60,
+                },
+            )
+            details = {
+                "1.1.1.1": {"location": "河北石家庄", "isp": "电信", "connections": 1},
+                "2.2.2.2": {"location": "河北石家庄", "isp": "联通", "connections": 1},
+            }
+
+            with mock.patch.object(MODULE, "get_active_ip_details", return_value=details), \
+                mock.patch.object(MODULE, "send_telegram_message") as send:
+                ok, message = MODULE.scan_new_source_notifications("49376", str(config_path), str(state_path))
+
+            self.assertTrue(ok)
+            self.assertEqual(message, "已初始化当前来源")
+            send.assert_not_called()
+            state = MODULE.load_monitor_state(str(state_path))
+            self.assertIn("河北石家庄|电信", state["seen_sources"])
+            self.assertIn("河北石家庄|联通", state["seen_sources"])
+
+    def test_scan_new_source_notification_sends_only_new_location_and_isp_sources(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            state_path = Path(temp_dir) / "state.json"
+            MODULE.save_monitor_config(
+                str(config_path),
+                {
+                    "server_name": "香港中转1",
+                    "telegram_bot_token": "token",
+                    "telegram_chat_id": "chat",
+                    "scan_interval": 60,
+                },
+            )
+            MODULE.save_monitor_state(
+                str(state_path),
+                {
+                    "initialized": True,
+                    "seen_sources": {
+                        "河北石家庄|电信": {
+                            "location": "河北石家庄",
+                            "isp": "电信",
+                            "first_seen_at": "2026-06-05 22:00:00",
+                            "last_seen_at": "2026-06-05 22:00:00",
+                            "seen_count": 1,
+                        }
+                    },
+                },
+            )
+            details = {
+                "1.1.1.1": {"location": "河北石家庄", "isp": "电信", "connections": 1},
+                "2.2.2.2": {"location": "河北石家庄", "isp": "联通", "connections": 1},
+            }
+
+            with mock.patch.object(MODULE, "get_active_ip_details", return_value=details), \
+                mock.patch.object(MODULE, "send_telegram_message", return_value=(True, "已发送")) as send:
+                ok, message = MODULE.scan_new_source_notifications("49376", str(config_path), str(state_path))
+
+            self.assertTrue(ok)
+            self.assertEqual(message, "已发送新来源通知")
+            send.assert_called_once_with("token", "chat", "香港中转1 有新的 河北石家庄联通 加入")
+
+    def test_new_source_menu_uses_fixed_options_and_collects_enable_inputs_separately(self):
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "is_monitor_enabled", return_value=False), \
+            mock.patch.object(MODULE, "enable_new_source_monitor", return_value=(True, "自动扫描已开启。")) as enable, \
+            mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch.object(MODULE.time, "sleep"), \
+            mock.patch("builtins.input", side_effect=["1", "香港中转1", "token", "chat", "", "0"]), \
+            redirect_stdout(output):
+            MODULE.new_source_notify_menu("49376")
+
+        enable.assert_called_once_with("49376", "香港中转1", "token", "chat", 60)
+        text = output.getvalue()
+        self.assertIn("当前状态：已关闭", text)
+        self.assertIn("1. 开启自动扫描", text)
+        self.assertIn("2. 关闭自动扫描", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -31,6 +32,10 @@ SELF_UPDATE_URL = os.environ.get(
     "SNELL_QUERY_UPDATE_URL",
     "https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main",
 )
+MONITOR_DIR = os.environ.get("SNELL_QUERY_MONITOR_DIR", "/root/.snell-ip-query")
+MONITOR_CONFIG_PATH = os.environ.get("SNELL_QUERY_MONITOR_CONFIG", os.path.join(MONITOR_DIR, "config.json"))
+MONITOR_STATE_PATH = os.environ.get("SNELL_QUERY_MONITOR_STATE", os.path.join(MONITOR_DIR, "state.json"))
+MONITOR_SERVICE_NAME = os.environ.get("SNELL_QUERY_MONITOR_SERVICE", "snell-new-source-notify")
 
 
 def run_command(args):
@@ -514,6 +519,156 @@ def filter_blocked_ip_details(details, blocked_entries):
     return {ip: detail for ip, detail in details.items() if ip not in blocked_ips}
 
 
+def ensure_parent_dir(path):
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
+def load_json_file(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError):
+        pass
+    return default.copy()
+
+
+def save_json_file(path, data):
+    ensure_parent_dir(path)
+    temp_path = path + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(temp_path, path)
+
+
+def load_monitor_config(path=MONITOR_CONFIG_PATH):
+    return load_json_file(
+        path,
+        {
+            "server_name": "",
+            "telegram_bot_token": "",
+            "telegram_chat_id": "",
+            "scan_interval": 60,
+        },
+    )
+
+
+def save_monitor_config(path, config):
+    save_json_file(path, config)
+
+
+def load_monitor_state(path=MONITOR_STATE_PATH):
+    state = load_json_file(path, {"initialized": False, "seen_sources": {}})
+    if not isinstance(state.get("seen_sources"), dict):
+        state["seen_sources"] = {}
+    state["initialized"] = bool(state.get("initialized"))
+    return state
+
+
+def save_monitor_state(path, state):
+    save_json_file(path, state)
+
+
+def now_shanghai_string():
+    shanghai_tz = timezone(timedelta(hours=8))
+    return datetime.now(shanghai_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def build_source_key(location, isp):
+    return (location or "地区未知") + "|" + (isp or "运营商未知")
+
+
+def source_label(location, isp):
+    return (location or "地区未知") + (isp or "运营商未知")
+
+
+def collect_sources_from_details(details, now_text):
+    sources = {}
+    for detail in details.values():
+        location = detail.get("location", "地区未知")
+        isp = detail.get("isp", "运营商未知")
+        key = build_source_key(location, isp)
+        sources[key] = {
+            "location": location,
+            "isp": isp,
+            "first_seen_at": now_text,
+            "last_seen_at": now_text,
+            "seen_count": 1,
+        }
+    return sources
+
+
+def build_new_source_message(server_name, new_sources):
+    labels = [source_label(item.get("location"), item.get("isp")) for item in new_sources]
+    if len(labels) == 1:
+        return server_name + " 有新的 " + labels[0] + " 加入"
+
+    return server_name + " 有新的来源加入：\n" + "\n".join(labels)
+
+
+def send_telegram_message(bot_token, chat_id, text):
+    url = "https://api.telegram.org/bot" + urllib.parse.quote(bot_token, safe=":") + "/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    request = urllib.request.Request(url, data=data, headers={"User-Agent": "snell-usage-counter/2.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=IP_API_TIMEOUT) as response:
+            body = response.read().decode("utf-8")
+        result = json.loads(body)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        return False, "Telegram 发送失败：" + str(exc)
+
+    if not result.get("ok"):
+        return False, "Telegram 发送失败"
+    return True, "已发送"
+
+
+def scan_new_source_notifications(port, config_path=MONITOR_CONFIG_PATH, state_path=MONITOR_STATE_PATH):
+    config = load_monitor_config(config_path)
+    server_name = (config.get("server_name") or "").strip()
+    bot_token = (config.get("telegram_bot_token") or "").strip()
+    chat_id = (config.get("telegram_chat_id") or "").strip()
+    if not server_name or not bot_token or not chat_id:
+        return False, "自动扫描配置不完整"
+
+    now_text = now_shanghai_string()
+    current_sources = collect_sources_from_details(get_active_ip_details(port), now_text)
+    state = load_monitor_state(state_path)
+    seen_sources = state["seen_sources"]
+
+    if not state.get("initialized"):
+        seen_sources.update(current_sources)
+        state["initialized"] = True
+        save_monitor_state(state_path, state)
+        return True, "已初始化当前来源"
+
+    new_sources = []
+    for key, source in current_sources.items():
+        if key not in seen_sources:
+            new_sources.append(source)
+            continue
+        seen_sources[key]["last_seen_at"] = now_text
+        seen_sources[key]["seen_count"] = int(seen_sources[key].get("seen_count", 0)) + 1
+
+    if not new_sources:
+        save_monitor_state(state_path, state)
+        return True, "没有新来源"
+
+    ok, message = send_telegram_message(bot_token, chat_id, build_new_source_message(server_name, new_sources))
+    if not ok:
+        save_monitor_state(state_path, state)
+        return False, message
+
+    for source in new_sources:
+        seen_sources[build_source_key(source.get("location"), source.get("isp"))] = source
+    save_monitor_state(state_path, state)
+    return True, "已发送新来源通知"
+
+
 def format_summary_line(location_and_isp, count):
     location, isp = location_and_isp
     return location + isp + "：" + str(count)
@@ -671,6 +826,118 @@ def run_unblock_commands(blocked_entry):
     return True, "已解除封禁"
 
 
+def systemd_unit_paths(service_name=MONITOR_SERVICE_NAME):
+    return ("/etc/systemd/system/" + service_name + ".service", "/etc/systemd/system/" + service_name + ".timer")
+
+
+def build_monitor_service_content(script_path):
+    return "\n".join(
+        [
+            "[Unit]",
+            "Description=Snell new source notification scan",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            "ExecStart=" + script_path + " --scan-new-source-notify",
+            "",
+        ]
+    )
+
+
+def build_monitor_timer_content(interval_seconds):
+    return "\n".join(
+        [
+            "[Unit]",
+            "Description=Run Snell new source notification scan",
+            "",
+            "[Timer]",
+            "OnBootSec=" + str(interval_seconds) + "s",
+            "OnUnitActiveSec=" + str(interval_seconds) + "s",
+            "AccuracySec=5s",
+            "Persistent=true",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+            "",
+        ]
+    )
+
+
+def install_monitor_timer(interval_seconds):
+    if not shutil.which("systemctl"):
+        return False, "未找到 systemctl，无法开启自动扫描"
+
+    script_path = os.path.abspath(sys.argv[0])
+    service_path, timer_path = systemd_unit_paths()
+    try:
+        with open(service_path, "w", encoding="utf-8") as f:
+            f.write(build_monitor_service_content(script_path))
+        with open(timer_path, "w", encoding="utf-8") as f:
+            f.write(build_monitor_timer_content(interval_seconds))
+    except OSError as exc:
+        return False, "写入 systemd 配置失败：" + str(exc)
+
+    commands = [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", MONITOR_SERVICE_NAME + ".timer"],
+    ]
+    for command in commands:
+        try:
+            subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False, "systemd 命令执行失败：" + " ".join(command)
+
+    return True, "自动扫描已开启。"
+
+
+def disable_monitor_timer():
+    if not shutil.which("systemctl"):
+        return False, "未找到 systemctl，无法关闭自动扫描"
+
+    commands = [
+        ["systemctl", "disable", "--now", MONITOR_SERVICE_NAME + ".timer"],
+        ["systemctl", "daemon-reload"],
+    ]
+    for command in commands:
+        try:
+            subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            return False, "systemd 命令执行失败：" + " ".join(command)
+
+    return True, "自动扫描已关闭。"
+
+
+def is_monitor_enabled():
+    if not shutil.which("systemctl"):
+        return False
+    return subprocess.call(
+        ["systemctl", "is-active", "--quiet", MONITOR_SERVICE_NAME + ".timer"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ) == 0
+
+
+def enable_new_source_monitor(port, server_name, bot_token, chat_id, scan_interval):
+    config = {
+        "server_name": server_name,
+        "telegram_bot_token": bot_token,
+        "telegram_chat_id": chat_id,
+        "scan_interval": scan_interval,
+    }
+    save_monitor_config(MONITOR_CONFIG_PATH, config)
+
+    state = load_monitor_state(MONITOR_STATE_PATH)
+    state["initialized"] = False
+    state["seen_sources"] = {}
+    save_monitor_state(MONITOR_STATE_PATH, state)
+
+    ok, message = scan_new_source_notifications(port)
+    if not ok:
+        return False, message
+
+    return install_monitor_timer(scan_interval)
+
+
 def normalize_location(country, region, city):
     country = normalize_area_name((country or "").strip())
     region = (region or "").strip()
@@ -801,6 +1068,15 @@ def normalize_isp(value):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--scan-new-source-notify":
+        port = get_snell_port()
+        if not port:
+            print("未能自动识别 Snell 端口。可用 SNELL_PORT=端口 手动指定。", file=sys.stderr)
+            return 2
+        ok, message = scan_new_source_notifications(port)
+        print(message)
+        return 0 if ok else 1
+
     port = get_snell_port()
     if not port:
         print("未能自动识别 Snell 端口。可用 SNELL_PORT=端口 手动指定。", file=sys.stderr)
@@ -845,6 +1121,7 @@ def show_menu(port):
         print("1. 查询 IP 连接情况")
         print("2. 按 IP 封禁")
         print("3. 解除 IP 封禁")
+        print("4. 新来源自动通知")
         print("0. 退出脚本")
         print("00. 更新脚本")
         choice = input("请选择：").strip().lower()
@@ -865,6 +1142,10 @@ def show_menu(port):
         if choice == "3":
             refresh_screen()
             unblock_by_ip(port)
+            continue
+        if choice == "4":
+            refresh_screen()
+            new_source_notify_menu(port)
             continue
 
         print("无效选项")
@@ -942,6 +1223,57 @@ def unblock_by_ip(port):
         else:
             print(message)
         time.sleep(1)
+        refresh_screen()
+
+
+def parse_scan_interval(value):
+    value = value.strip()
+    if not value:
+        return 60
+    if not value.isdigit() or int(value) <= 0:
+        return None
+    return int(value)
+
+
+def new_source_notify_menu(port):
+    while True:
+        print()
+        print("新来源自动通知")
+        print()
+        print("当前状态：" + ("已开启" if is_monitor_enabled() else "已关闭"))
+        print()
+        print("1. 开启自动扫描")
+        print("2. 关闭自动扫描")
+        print("0. 返回")
+        choice = input("请选择：").strip().lower()
+
+        if choice == "0":
+            return
+        if choice == "1":
+            server_name = input("请输入服务器名称：").strip()
+            bot_token = input("请输入 Telegram Bot Token：").strip()
+            chat_id = input("请输入 Telegram Chat ID：").strip()
+            interval = parse_scan_interval(input("请输入扫描间隔秒数，默认 60："))
+            if not server_name or not bot_token or not chat_id or interval is None:
+                print("输入无效")
+                wait_return()
+                refresh_screen()
+                continue
+
+            ok, message = enable_new_source_monitor(port, server_name, bot_token, chat_id, interval)
+            print(message)
+            time.sleep(1)
+            refresh_screen()
+            continue
+        if choice == "2":
+            _ok, message = disable_monitor_timer()
+            print(message)
+            time.sleep(1)
+            refresh_screen()
+            continue
+
+        print("无效选项")
+        wait_return()
         refresh_screen()
 
 if __name__ == "__main__":
