@@ -579,7 +579,6 @@ manage_allow_port() {
       result=$?
     fi
     if [[ $result -eq 2 ]]; then
-      refresh_screen
       return 0
     fi
     finish_menu_action
@@ -633,7 +632,6 @@ manage_delete_allowed_port() {
     if ! command -v ufw >/dev/null 2>&1; then
       echo "未找到 ufw，请先进入 2 防火墙管理，选择 1 安装 UFW 防火墙。"
       read -r -p "0 返回上一级菜单：" _back
-      refresh_screen
       return 0
     fi
 
@@ -644,7 +642,6 @@ manage_delete_allowed_port() {
       result=$?
     fi
     if [[ $result -eq 2 ]]; then
-      refresh_screen
       return 0
     fi
     finish_menu_action
@@ -664,7 +661,7 @@ manage_base_firewall() {
     case "$choice" in
       1) refresh_screen; install_base_firewall; finish_menu_action ;;
       2) refresh_screen; disable_base_firewall; finish_menu_action ;;
-      0) refresh_screen; return 0 ;;
+      0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
   done
@@ -683,7 +680,7 @@ manage_udp_all_in() {
     case "$choice" in
       1) refresh_screen; enable_udp_all_in; finish_menu_action ;;
       2) refresh_screen; disable_udp_all_in; finish_menu_action ;;
-      0) refresh_screen; return 0 ;;
+      0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
   done
@@ -702,7 +699,7 @@ manage_fail2ban() {
     case "$choice" in
       1) refresh_screen; install_fail2ban_ssh_guard; finish_menu_action ;;
       2) refresh_screen; disable_fail2ban_ssh_guard; finish_menu_action ;;
-      0) refresh_screen; return 0 ;;
+      0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
   done
@@ -726,7 +723,7 @@ firewall_menu() {
       3) refresh_screen; manage_delete_allowed_port ;;
       4) refresh_screen; manage_udp_all_in ;;
       5) refresh_screen; manage_fail2ban ;;
-      0) refresh_screen; return 0 ;;
+      0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
   done
