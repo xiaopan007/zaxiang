@@ -665,13 +665,12 @@ monitor_loop() {
 }
 
 send_login_notification() {
-  local ip time username location message
+  local ip username location message
   ip=\$(echo "\${SSH_CONNECTION:-}" | awk '{print \$1}')
   [[ -n "\$ip" ]] || return 0
-  time=\$(date +"%Y年%m月%d日 %H:%M:%S")
   username=\$(whoami)
   location=\$(curl -fsS "http://opendata.baidu.com/api.php?query=\$ip&co=&resource_id=6006&oe=utf8&format=json" 2>/dev/null | jq -r '.data[0].location // "未知"' 2>/dev/null || echo "未知")
-  message="ℹ️ \${SERVER_DISPLAY_NAME} 于 \${time} 进行登录
+  message="ℹ️ \${SERVER_DISPLAY_NAME} 有人登录
 登录用户：\$username
 登录IP：\$ip
 登录地区为：\$location"
@@ -732,6 +731,12 @@ configure_tg_notify_script() {
   existing_token="$(tg_config_value "$notify_file" TELEGRAM_BOT_TOKEN)"
   existing_chat_id="$(tg_config_value "$notify_file" CHAT_ID)"
   existing_server_name="$(tg_config_value "$notify_file" SERVER_DISPLAY_NAME)"
+  if [[ -n "$existing_server_name" ]]; then
+    server_name="$existing_server_name"
+  else
+    server_name="$(prompt_required_value "请输入服务器显示名称：")"
+    echo
+  fi
   if [[ -n "$existing_token" && -n "$existing_chat_id" ]]; then
     bot_token="$existing_token"
     chat_id="$existing_chat_id"
@@ -742,12 +747,6 @@ configure_tg_notify_script() {
     bot_token="$(prompt_required_value "请输入 Telegram Bot Token：")"
     echo
     chat_id="$(prompt_required_value "请输入接收通知的 Chat ID：")"
-    echo
-  fi
-  if [[ -n "$existing_server_name" ]]; then
-    server_name="$existing_server_name"
-  else
-    server_name="$(prompt_required_value "请输入服务器显示名称：")"
     echo
   fi
 
@@ -1246,8 +1245,8 @@ main_menu() {
     echo
     echo "1. 优化 VPS"
     echo "2. 防火墙管理"
-    echo "4. TG-bot通知管理"
-    echo "5. 测试脚本合集"
+    echo "3. TG-bot通知管理"
+    echo "4. 测试脚本合集"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -1264,8 +1263,8 @@ main_menu() {
         finish_menu_action
       ;;
       2) refresh_screen; firewall_menu ;;
-      4) refresh_screen; tg_notify_menu ;;
-      5) refresh_screen; test_scripts_menu ;;
+      3) refresh_screen; tg_notify_menu ;;
+      4) refresh_screen; test_scripts_menu ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
