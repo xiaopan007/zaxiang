@@ -712,20 +712,20 @@ firewall_menu() {
   while true; do
     echo
     echo "1. UFW 防火墙管理"
-    echo "2. 全部 UDP 入站放行管理"
-    echo "3. SSH 防暴力破解管理"
-    echo "4. 加入放行端口"
-    echo "5. 删除放行端口"
+    echo "2. 加入放行端口"
+    echo "3. 删除放行端口"
+    echo "4. 全部 UDP 入站放行管理"
+    echo "5. SSH 防暴力破解管理"
     echo "0. 返回上一级菜单"
     local choice
     read -r -p "请选择：" choice
 
     case "$choice" in
       1) refresh_screen; manage_base_firewall ;;
-      2) refresh_screen; manage_udp_all_in ;;
-      3) refresh_screen; manage_fail2ban ;;
-      4) refresh_screen; manage_allow_port ;;
-      5) refresh_screen; manage_delete_allowed_port ;;
+      2) refresh_screen; manage_allow_port ;;
+      3) refresh_screen; manage_delete_allowed_port ;;
+      4) refresh_screen; manage_udp_all_in ;;
+      5) refresh_screen; manage_fail2ban ;;
       0) refresh_screen; return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -750,7 +750,9 @@ main_menu() {
         refresh_screen
         FINISH_ENABLED=true
         optimize_vps
-        exit 0
+        FINISH_ENABLED=false
+        echo "优化完成，返回主菜单。"
+        finish_menu_action
         ;;
       2) refresh_screen; firewall_menu ;;
       0) refresh_screen; exit 0 ;;
