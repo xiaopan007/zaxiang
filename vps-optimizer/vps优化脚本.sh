@@ -558,82 +558,314 @@ download_file() {
   fi
 }
 
-setup_tg_monitoring() {
+write_tg_notify_script() {
+  local output="$1"
+  local bot_token="$2"
+  local chat_id="$3"
+  local cpu_threshold="$4"
+  local memory_threshold="$5"
+  local disk_threshold="$6"
+  local network_threshold="$7"
+
+  cat >"$output" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+
+TELEGRAM_BOT_TOKEN=$(shell_quote "$bot_token")
+CHAT_ID=$(shell_quote "$chat_id")
+
+CPU_THRESHOLD=$cpu_threshold
+MEMORY_THRESHOLD=$memory_threshold
+DISK_THRESHOLD=$disk_threshold
+NETWORK_THRESHOLD_GB=$network_threshold
+
+get_machine_label() {
+  local country isp_info ipv4_address masked_ip
+  country=\$(curl -fsS ipinfo.io/country 2>/dev/null || echo "未知")
+  isp_info=\$(curl -fsS ipinfo.io/org 2>/dev/null | sed -e 's/"//g' | awk -F' ' '{print \$2}' || echo "未知")
+  ipv4_address=\$(curl -fsS ipv4.ip.sb 2>/dev/null || echo "0.0.0.0")
+  masked_ip=\$(echo "\$ipv4_address" | awk -F'.' '{print "*."\$3"."\$4}')
+  echo "\${isp_info:-未知}-\${country:-未知}-\${masked_ip:-*.0.0}"
+}
+
+send_tg_notification() {
+  local message="\$1"
+  curl -fsS -X POST "https://api.telegram.org/bot\$TELEGRAM_BOT_TOKEN/sendMessage" \\
+    -d "chat_id=\$CHAT_ID" \\
+    -d "text=\$message" >/dev/null 2>&1 || true
+}
+
+get_cpu_usage() {
+  awk '{u=\$2+\$4; t=\$2+\$4+\$5; if (NR==1){u1=u; t1=t;} else printf "%.0f\\n", ((\$2+\$4-u1) * 100 / (t-t1))}' \\
+    <(grep 'cpu ' /proc/stat) <(sleep 1; grep 'cpu ' /proc/stat)
+}
+
+get_memory_usage() {
+  free | awk '/Mem/ {printf("%.0f"), \$3/\$2 * 100}'
+}
+
+get_disk_usage() {
+  df / | awk 'NR==2 {print \$5}' | sed 's/%//'
+}
+
+get_rx_bytes() {
+  awk 'BEGIN { rx_total = 0 }
+    \$1 ~ /^(eth|ens|enp|eno)[0-9]+/ { rx_total += \$2 }
+    END { printf("%.2f", rx_total / (1024 * 1024 * 1024)); }' /proc/net/dev
+}
+
+get_tx_bytes() {
+  awk 'BEGIN { tx_total = 0 }
+    \$1 ~ /^(eth|ens|enp|eno)[0-9]+/ { tx_total += \$10 }
+    END { printf("%.2f", tx_total / (1024 * 1024 * 1024)); }' /proc/net/dev
+}
+
+check_and_notify() {
+  local usage="\$1"
+  local type="\$2"
+  local threshold="\$3"
+  local machine_label="\$4"
+  if (( \$(echo "\$threshold <= 0" | bc -l) )); then
+    return 0
+  fi
+  if (( \$(echo "\$usage > \$threshold" | bc -l) )); then
+    send_tg_notification "警告：\${machine_label} 的\${type}已达到 \${usage}%，超过阈值 \${threshold}%。"
+  fi
+}
+
+monitor_loop() {
+  while true; do
+    local machine_label cpu_usage memory_usage disk_usage rx_gb tx_gb
+    machine_label=\$(get_machine_label)
+    cpu_usage=\$(get_cpu_usage)
+    memory_usage=\$(get_memory_usage)
+    disk_usage=\$(get_disk_usage)
+    rx_gb=\$(get_rx_bytes)
+    tx_gb=\$(get_tx_bytes)
+
+    check_and_notify "\$cpu_usage" "CPU 使用情况" "\$CPU_THRESHOLD" "\$machine_label"
+    check_and_notify "\$memory_usage" "内存使用情况" "\$MEMORY_THRESHOLD" "\$machine_label"
+    check_and_notify "\$disk_usage" "硬盘使用情况" "\$DISK_THRESHOLD" "\$machine_label"
+
+    if (( \$(echo "\$NETWORK_THRESHOLD_GB > 0 && \$rx_gb > \$NETWORK_THRESHOLD_GB" | bc -l) )); then
+      send_tg_notification "警告：\${machine_label} 的入站流量使用情况已达到 \${rx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
+    fi
+    if (( \$(echo "\$NETWORK_THRESHOLD_GB > 0 && \$tx_gb > \$NETWORK_THRESHOLD_GB" | bc -l) )); then
+      send_tg_notification "警告：\${machine_label} 的出站流量使用情况已达到 \${tx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
+    fi
+
+    sleep 300
+  done
+}
+
+send_login_notification() {
+  local machine_label ip time username location message
+  machine_label=\$(get_machine_label)
+  ip=\$(echo "\${SSH_CONNECTION:-}" | awk '{print \$1}')
+  [[ -n "\$ip" ]] || return 0
+  time=\$(date +"%Y年%m月%d日 %H:%M:%S")
+  username=\$(whoami)
+  location=\$(curl -fsS "http://opendata.baidu.com/api.php?query=\$ip&co=&resource_id=6006&oe=utf8&format=json" 2>/dev/null | jq -r '.data[0].location // "未知"' 2>/dev/null || echo "未知")
+  message="ℹ️ 登录信息：
+登录机器：\${machine_label}
+登录名：\$username
+登录IP：\$ip
+登录时间：\$time
+登录地区：\$location"
+  send_tg_notification "\$message"
+}
+
+case "\${1:-monitor}" in
+  monitor) monitor_loop ;;
+  login) send_login_notification ;;
+  *) echo "用法: \$0 [monitor|login]" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$output"
+}
+
+notify_threshold_value() {
+  local file="$1"
+  local name="$2"
+  local default="${3:-0}"
+  local value
+  value="$(grep -E "^${name}=" "$file" 2>/dev/null | head -n 1 | cut -d= -f2- || true)"
+  if [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+    printf "%s" "$value"
+  else
+    printf "%s" "$default"
+  fi
+}
+
+tg_config_value() {
+  local file="$1"
+  local name="$2"
+  local value
+  value="$(grep -E "^${name}=" "$file" 2>/dev/null | head -n 1 | cut -d= -f2- || true)"
+  value="${value#\'}"
+  value="${value%\'}"
+  printf "%s" "$value"
+}
+
+ensure_tg_notify_dependencies() {
   require_root
   detect_pkg_mgr >/dev/null
-
-  echo "TG-bot系统监控预警"
-  echo "将配置 CPU、内存、硬盘、流量阈值预警，并启用 SSH 登录通知。"
-  echo "你需要提前准备 Telegram Bot Token 和接收通知的 Chat ID。"
-  echo
-
-  local confirm
-  read -r -p "确定继续吗？[y/N]: " confirm
-  case "${confirm,,}" in
-    y|yes) ;;
-    *) echo "已取消。"; return 0 ;;
-  esac
-
-  local bot_token chat_id cpu_threshold memory_threshold disk_threshold network_threshold
-  bot_token="$(prompt_required_value "请输入 Telegram Bot Token：")"
-  echo
-  chat_id="$(prompt_required_value "请输入接收通知的 Chat ID：")"
-  echo
-  cpu_threshold="$(prompt_optional_threshold "CPU 使用率预警阈值百分比")"
-  memory_threshold="$(prompt_optional_threshold "内存使用率预警阈值百分比")"
-  disk_threshold="$(prompt_optional_threshold "硬盘使用率预警阈值百分比")"
-  network_threshold="$(prompt_optional_threshold "入站/出站流量预警阈值 GB")"
-
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
   apt-get install -y curl tmux bc jq cron
   systemctl enable --now cron >/dev/null 2>&1 || true
+}
 
-  local monitor_file="$HOME/TG-check-notify.sh"
-  local ssh_file="$HOME/TG-SSH-check-notify.sh"
-  local monitor_url="https://raw.githubusercontent.com/kejilion/sh/main/TG-check-notify.sh"
-  local ssh_url="https://raw.githubusercontent.com/kejilion/sh/main/TG-SSH-check-notify.sh"
+configure_tg_notify_script() {
+  local configure_monitor="${1:-false}"
+  local notify_file="$HOME/TG-notify.sh"
 
-  download_file "$monitor_url" "$monitor_file"
-  chmod +x "$monitor_file"
-
-  sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=$(shell_quote "$bot_token")|" "$monitor_file"
-  sed -i "s|^CHAT_ID=.*|CHAT_ID=$(shell_quote "$chat_id")|" "$monitor_file"
-  sed -i "s|^CPU_THRESHOLD=.*|CPU_THRESHOLD=$cpu_threshold|" "$monitor_file"
-  sed -i "s|^MEMORY_THRESHOLD=.*|MEMORY_THRESHOLD=$memory_threshold|" "$monitor_file"
-  sed -i "s|^DISK_THRESHOLD=.*|DISK_THRESHOLD=$disk_threshold|" "$monitor_file"
-  sed -i "s|^NETWORK_THRESHOLD_GB=.*|NETWORK_THRESHOLD_GB=$network_threshold|" "$monitor_file"
-  sed -i '/local CURRENT_VALUE/a\
-    if (( $(echo "$THRESHOLD <= 0" | bc -l) )); then\
-        return 0\
-    fi' "$monitor_file"
-  sed -i 's|echo "$RX_GB > $NETWORK_THRESHOLD_GB"|echo "$NETWORK_THRESHOLD_GB > 0 \&\& $RX_GB > $NETWORK_THRESHOLD_GB"|' "$monitor_file"
-  sed -i 's|echo "$TX_GB > $NETWORK_THRESHOLD_GB"|echo "$NETWORK_THRESHOLD_GB > 0 \&\& $TX_GB > $NETWORK_THRESHOLD_GB"|' "$monitor_file"
-
-  tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
-  tmux new -d -s TG-check-notify "$monitor_file"
-
-  crontab -l 2>/dev/null | grep -v 'TG-check-notify.sh' | crontab - 2>/dev/null || true
-  (crontab -l 2>/dev/null; echo "@reboot tmux new -d -s TG-check-notify '$monitor_file'") | crontab -
-
-  download_file "$ssh_url" "$ssh_file"
-  {
-    head -n 1 "$ssh_file"
-    printf "TELEGRAM_BOT_TOKEN=%s\n" "$(shell_quote "$bot_token")"
-    printf "CHAT_ID=%s\n" "$(shell_quote "$chat_id")"
-    tail -n +2 "$ssh_file"
-  } >"${ssh_file}.tmp"
-  mv "${ssh_file}.tmp" "$ssh_file"
-  chmod +x "$ssh_file"
-
-  if ! grep -qF "bash $ssh_file" "$HOME/.profile" 2>/dev/null; then
-    echo "bash $ssh_file" >> "$HOME/.profile"
+  local bot_token chat_id existing_token existing_chat_id cpu_threshold memory_threshold disk_threshold network_threshold
+  existing_token="$(tg_config_value "$notify_file" TELEGRAM_BOT_TOKEN)"
+  existing_chat_id="$(tg_config_value "$notify_file" CHAT_ID)"
+  if [[ -n "$existing_token" && -n "$existing_chat_id" ]]; then
+    bot_token="$existing_token"
+    chat_id="$existing_chat_id"
+    echo "已检测到现有 Telegram 配置，将直接沿用。"
+  else
+    echo "你需要提前准备 Telegram Bot Token 和接收通知的 Chat ID。"
+    echo
+    bot_token="$(prompt_required_value "请输入 Telegram Bot Token：")"
+    echo
+    chat_id="$(prompt_required_value "请输入接收通知的 Chat ID：")"
+    echo
   fi
 
-  echo
-  echo "TG-bot预警系统已启动。"
-  echo "监控脚本：$monitor_file"
-  echo "SSH 登录通知脚本：$ssh_file"
+  if [[ "$configure_monitor" == true ]]; then
+    cpu_threshold="$(prompt_optional_threshold "CPU 使用率预警阈值百分比")"
+    memory_threshold="$(prompt_optional_threshold "内存使用率预警阈值百分比")"
+    disk_threshold="$(prompt_optional_threshold "硬盘使用率预警阈值百分比")"
+    network_threshold="$(prompt_optional_threshold "入站/出站流量预警阈值 GB")"
+  else
+    cpu_threshold="$(notify_threshold_value "$notify_file" CPU_THRESHOLD 0)"
+    memory_threshold="$(notify_threshold_value "$notify_file" MEMORY_THRESHOLD 0)"
+    disk_threshold="$(notify_threshold_value "$notify_file" DISK_THRESHOLD 0)"
+    network_threshold="$(notify_threshold_value "$notify_file" NETWORK_THRESHOLD_GB 0)"
+  fi
+
+  write_tg_notify_script "$notify_file" "$bot_token" "$chat_id" "$cpu_threshold" "$memory_threshold" "$disk_threshold" "$network_threshold"
+}
+
+tg_monitor_status_text() {
+  if tmux has-session -t TG-check-notify >/dev/null 2>&1 || crontab -l 2>/dev/null | grep -Eq 'TG-notify\.sh.*monitor|TG-check-notify\.sh'; then
+    echo "开启"
+  else
+    echo "关闭"
+  fi
+}
+
+tg_login_status_text() {
+  if grep -q 'TG-notify.sh login' "$HOME/.profile" 2>/dev/null; then
+    echo "开启"
+  else
+    echo "关闭"
+  fi
+}
+
+enable_tg_monitor() {
+  ensure_tg_notify_dependencies
+  configure_tg_notify_script true
+
+  local notify_file="$HOME/TG-notify.sh"
+
+  tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
+  tmux new -d -s TG-check-notify "$notify_file" monitor
+
+  crontab -l 2>/dev/null | grep -Ev 'TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
+  (crontab -l 2>/dev/null; echo "@reboot tmux new -d -s TG-check-notify '$notify_file' monitor") | crontab -
+
+  echo "系统资源/流量报警已开启。"
+}
+
+disable_tg_monitor() {
+  require_root
+  tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
+  crontab -l 2>/dev/null | grep -Ev 'TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
+  echo "系统资源/流量报警已关闭。"
+}
+
+enable_tg_login_notify() {
+  ensure_tg_notify_dependencies
+  configure_tg_notify_script false
+
+  local notify_file="$HOME/TG-notify.sh"
+  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d' "$HOME/.profile" 2>/dev/null || true
+  if ! grep -qF "bash $notify_file login" "$HOME/.profile" 2>/dev/null; then
+    echo "bash $notify_file login" >> "$HOME/.profile"
+  fi
+
+  echo "SSH 登录通知已开启。"
+}
+
+disable_tg_login_notify() {
+  require_root
+  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d' "$HOME/.profile" 2>/dev/null || true
+  echo "SSH 登录通知已关闭。"
+}
+
+manage_tg_monitor() {
+  while true; do
+    echo
+    echo "系统资源/流量报警"
+    echo "当前状态：$(tg_monitor_status_text)"
+    echo "1. 开启系统资源/流量报警"
+    echo "2. 关闭系统资源/流量报警"
+    echo "0. 返回上一级菜单"
+    local choice
+    read -r -p "请选择：" choice
+
+    case "$choice" in
+      1) refresh_screen; enable_tg_monitor; finish_menu_action ;;
+      2) refresh_screen; disable_tg_monitor; finish_menu_action ;;
+      0) return 0 ;;
+      *) echo "无效选项。" ;;
+    esac
+  done
+}
+
+manage_tg_login_notify() {
+  while true; do
+    echo
+    echo "SSH 登录通知"
+    echo "当前状态：$(tg_login_status_text)"
+    echo "1. 开启 SSH 登录通知"
+    echo "2. 关闭 SSH 登录通知"
+    echo "0. 返回上一级菜单"
+    local choice
+    read -r -p "请选择：" choice
+
+    case "$choice" in
+      1) refresh_screen; enable_tg_login_notify; finish_menu_action ;;
+      2) refresh_screen; disable_tg_login_notify; finish_menu_action ;;
+      0) return 0 ;;
+      *) echo "无效选项。" ;;
+    esac
+  done
+}
+
+tg_notify_menu() {
+  while true; do
+    echo
+    echo "TG-bot通知管理"
+    echo "通知脚本：$HOME/TG-notify.sh"
+    echo "1. 系统资源/流量报警：$(tg_monitor_status_text)"
+    echo "2. SSH 登录通知：$(tg_login_status_text)"
+    echo "0. 返回上一级菜单"
+    local choice
+    read -r -p "请选择：" choice
+
+    case "$choice" in
+      1) refresh_screen; manage_tg_monitor ;;
+      2) refresh_screen; manage_tg_login_notify ;;
+      0) return 0 ;;
+      *) echo "无效选项。" ;;
+    esac
+  done
 }
 
 allow_port() {
@@ -860,7 +1092,7 @@ main_menu() {
     echo
     echo "1. 优化 VPS"
     echo "2. 防火墙管理"
-    echo "3. TG-bot系统监控预警"
+    echo "4. TG-bot通知管理"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -877,7 +1109,7 @@ main_menu() {
         finish_menu_action
         ;;
       2) refresh_screen; firewall_menu ;;
-      3) refresh_screen; setup_tg_monitoring ;;
+      4) refresh_screen; tg_notify_menu ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
