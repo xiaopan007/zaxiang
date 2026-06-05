@@ -6,9 +6,8 @@
 # 2) 配置并启用 2G 交换分区（若已存在则跳过），设置 vm.swappiness=10 以减少换页
 # 3) 限制 systemd-journald 日志占用（持久 <=200M，运行时 <=100M），并清理旧日志
 # 4) 检测并启用 BBR + fq（若内核支持；已启用则跳过；失败不影响其它步骤）
-# 5) 防火墙管理独立菜单：UFW、防全部 UDP 入站、Fail2Ban SSH 防护
-# 6) 端口放行/删除独立菜单
-# 7) 优化结束时如检测到需要重启，进行交互式确认（y 立即重启 / n 跳过），并给出 SSH 断连的安全提示
+# 5) 防火墙管理独立菜单：UFW、防全部 UDP 入站、Fail2Ban SSH 防护、端口放行/删除
+# 6) 优化结束时如检测到需要重启，进行交互式确认（y 立即重启 / n 跳过），并给出 SSH 断连的安全提示
 
 set -Eeuo pipefail
 exec 2>&1  # 将 stderr 合并到 stdout，确保终端按顺序显示全部输出
@@ -573,8 +572,12 @@ manage_allow_port() {
     echo "当前放行端口："
     print_allowed_ports
     echo
-    allow_port
-    local result=$?
+    local result=0
+    if allow_port; then
+      result=0
+    else
+      result=$?
+    fi
     if [[ $result -eq 2 ]]; then
       refresh_screen
       return 0
@@ -634,8 +637,12 @@ manage_delete_allowed_port() {
       return 0
     fi
 
-    delete_allowed_port
-    local result=$?
+    local result=0
+    if delete_allowed_port; then
+      result=0
+    else
+      result=$?
+    fi
     if [[ $result -eq 2 ]]; then
       refresh_screen
       return 0
