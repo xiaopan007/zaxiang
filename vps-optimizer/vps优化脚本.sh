@@ -562,10 +562,11 @@ write_tg_notify_script() {
   local output="$1"
   local bot_token="$2"
   local chat_id="$3"
-  local cpu_threshold="$4"
-  local memory_threshold="$5"
-  local disk_threshold="$6"
-  local network_threshold="$7"
+  local server_name="$4"
+  local cpu_threshold="$5"
+  local memory_threshold="$6"
+  local disk_threshold="$7"
+  local network_threshold="$8"
 
   cat >"$output" <<EOF
 #!/usr/bin/env bash
@@ -573,6 +574,7 @@ set -euo pipefail
 
 TELEGRAM_BOT_TOKEN=$(shell_quote "$bot_token")
 CHAT_ID=$(shell_quote "$chat_id")
+SERVER_DISPLAY_NAME=$(shell_quote "$server_name")
 
 CPU_THRESHOLD=$cpu_threshold
 MEMORY_THRESHOLD=$memory_threshold
@@ -581,6 +583,10 @@ NETWORK_THRESHOLD_GB=$network_threshold
 
 get_machine_label() {
   local country isp_info ipv4_address masked_ip
+  if [[ -n "\${SERVER_DISPLAY_NAME:-}" ]]; then
+    echo "\$SERVER_DISPLAY_NAME"
+    return 0
+  fi
   country=\$(curl -fsS ipinfo.io/country 2>/dev/null || echo "未知")
   isp_info=\$(curl -fsS ipinfo.io/org 2>/dev/null | sed -e 's/"//g' | awk -F' ' '{print \$2}' || echo "未知")
   ipv4_address=\$(curl -fsS ipv4.ip.sb 2>/dev/null || echo "0.0.0.0")
@@ -659,19 +665,16 @@ monitor_loop() {
 }
 
 send_login_notification() {
-  local machine_label ip time username location message
-  machine_label=\$(get_machine_label)
+  local ip time username location message
   ip=\$(echo "\${SSH_CONNECTION:-}" | awk '{print \$1}')
   [[ -n "\$ip" ]] || return 0
   time=\$(date +"%Y年%m月%d日 %H:%M:%S")
   username=\$(whoami)
   location=\$(curl -fsS "http://opendata.baidu.com/api.php?query=\$ip&co=&resource_id=6006&oe=utf8&format=json" 2>/dev/null | jq -r '.data[0].location // "未知"' 2>/dev/null || echo "未知")
-  message="ℹ️ 登录信息：
-登录机器：\${machine_label}
-登录名：\$username
+  message="ℹ️ \${SERVER_DISPLAY_NAME} 于 \${time} 进行登录
+登录用户：\$username
 登录IP：\$ip
-登录时间：\$time
-登录地区：\$location"
+登录地区为：\$location"
   send_tg_notification "\$message"
 }
 
@@ -725,9 +728,10 @@ configure_tg_notify_script() {
   local notify_file
   notify_file="$(tg_notify_file)"
 
-  local bot_token chat_id existing_token existing_chat_id cpu_threshold memory_threshold disk_threshold network_threshold
+  local bot_token chat_id server_name existing_token existing_chat_id existing_server_name cpu_threshold memory_threshold disk_threshold network_threshold
   existing_token="$(tg_config_value "$notify_file" TELEGRAM_BOT_TOKEN)"
   existing_chat_id="$(tg_config_value "$notify_file" CHAT_ID)"
+  existing_server_name="$(tg_config_value "$notify_file" SERVER_DISPLAY_NAME)"
   if [[ -n "$existing_token" && -n "$existing_chat_id" ]]; then
     bot_token="$existing_token"
     chat_id="$existing_chat_id"
@@ -738,6 +742,12 @@ configure_tg_notify_script() {
     bot_token="$(prompt_required_value "请输入 Telegram Bot Token：")"
     echo
     chat_id="$(prompt_required_value "请输入接收通知的 Chat ID：")"
+    echo
+  fi
+  if [[ -n "$existing_server_name" ]]; then
+    server_name="$existing_server_name"
+  else
+    server_name="$(prompt_required_value "请输入服务器显示名称：")"
     echo
   fi
 
@@ -753,7 +763,7 @@ configure_tg_notify_script() {
     network_threshold="$(notify_threshold_value "$notify_file" NETWORK_THRESHOLD_GB 0)"
   fi
 
-  write_tg_notify_script "$notify_file" "$bot_token" "$chat_id" "$cpu_threshold" "$memory_threshold" "$disk_threshold" "$network_threshold"
+  write_tg_notify_script "$notify_file" "$bot_token" "$chat_id" "$server_name" "$cpu_threshold" "$memory_threshold" "$disk_threshold" "$network_threshold"
 }
 
 tg_monitor_status_text() {
