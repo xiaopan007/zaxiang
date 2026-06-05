@@ -317,6 +317,32 @@ Status: active
         call.assert_not_called()
         self.assertEqual(output.getvalue(), "\n")
 
+    def test_clear_screen_on_exit_uses_clear_when_terminal_supports_it(self):
+        class FakeTTY(io.StringIO):
+            def isatty(self):
+                return True
+
+        output = FakeTTY()
+
+        with mock.patch.object(MODULE.sys, "stdout", output), \
+            mock.patch.dict(MODULE.os.environ, {"TERM": "xterm"}, clear=False), \
+            mock.patch.object(MODULE.shutil, "which", return_value="/usr/bin/clear"), \
+            mock.patch.object(MODULE.subprocess, "call") as call:
+            MODULE.clear_screen_on_exit()
+
+        call.assert_called_once_with(["clear"], stderr=MODULE.subprocess.DEVNULL)
+
+    def test_main_menu_exit_clears_screen(self):
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "clear_screen_on_exit") as clear, \
+            mock.patch("builtins.input", return_value="0"), \
+            redirect_stdout(output):
+            result = MODULE.show_menu("49376")
+
+        self.assertEqual(result, 0)
+        clear.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

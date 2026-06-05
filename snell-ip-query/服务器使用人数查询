@@ -1112,6 +1112,13 @@ def refresh_screen():
     print()
 
 
+def clear_screen_on_exit():
+    if sys.stdout.isatty() and os.environ.get("TERM") and shutil.which("clear"):
+        subprocess.call(["clear"], stderr=subprocess.DEVNULL)
+    else:
+        print()
+
+
 def show_menu(port):
     while True:
         print()
@@ -1126,7 +1133,7 @@ def show_menu(port):
         if choice == "00":
             return self_update()
         if choice in ("0", "q", "quit", "exit"):
-            refresh_screen()
+            clear_screen_on_exit()
             return 0
         if choice == "1":
             refresh_screen()
