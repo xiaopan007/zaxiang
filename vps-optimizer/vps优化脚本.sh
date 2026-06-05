@@ -174,9 +174,15 @@ set_timezone_shanghai() {
   echo "设置系统时区为 Asia/Shanghai..."
   if command -v timedatectl >/dev/null 2>&1; then
     timedatectl set-timezone Asia/Shanghai
-  else
-    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-    echo "Asia/Shanghai" >/etc/timezone
+  fi
+
+  ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+  echo "Asia/Shanghai" >/etc/timezone
+
+  local timezone
+  timezone=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || true)
+  if [[ "$timezone" != "Asia/Shanghai" ]]; then
+    echo "警告：时区校验异常，当前识别为：${timezone:-未知}"
   fi
   date
 }
