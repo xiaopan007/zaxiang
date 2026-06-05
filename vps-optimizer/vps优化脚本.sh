@@ -518,6 +518,124 @@ validate_port() {
   [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 ))
 }
 
+prompt_required_value() {
+  local prompt="$1"
+  local value
+  while true; do
+    read -r -p "$prompt" value
+    if [[ -n "$value" ]]; then
+      printf "%s" "$value"
+      return 0
+    fi
+    echo "不能为空，请重新输入。"
+  done
+}
+
+prompt_optional_threshold() {
+  local prompt="$1"
+  local value
+  while true; do
+    read -r -p "$prompt，直接回车不启用 [0]: " value
+    value="${value:-0}"
+    if [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+      printf "%s" "$value"
+      return 0
+    fi
+    echo "请输入数字，或直接回车不启用。"
+  done
+}
+
+download_file() {
+  local url="$1"
+  local output="$2"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$output"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$output" "$url"
+  else
+    echo "未找到 curl 或 wget，无法下载文件。"
+    return 1
+  fi
+}
+
+setup_tg_monitoring() {
+  require_root
+  detect_pkg_mgr >/dev/null
+
+  echo "TG-bot系统监控预警"
+  echo "将配置 CPU、内存、硬盘、流量阈值预警，并启用 SSH 登录通知。"
+  echo "你需要提前准备 Telegram Bot Token 和接收通知的 Chat ID。"
+  echo
+
+  local confirm
+  read -r -p "确定继续吗？[y/N]: " confirm
+  case "${confirm,,}" in
+    y|yes) ;;
+    *) echo "已取消。"; return 0 ;;
+  esac
+
+  local bot_token chat_id cpu_threshold memory_threshold disk_threshold network_threshold
+  bot_token="$(prompt_required_value "请输入 Telegram Bot Token：")"
+  echo
+  chat_id="$(prompt_required_value "请输入接收通知的 Chat ID：")"
+  echo
+  cpu_threshold="$(prompt_optional_threshold "CPU 使用率预警阈值百分比")"
+  memory_threshold="$(prompt_optional_threshold "内存使用率预警阈值百分比")"
+  disk_threshold="$(prompt_optional_threshold "硬盘使用率预警阈值百分比")"
+  network_threshold="$(prompt_optional_threshold "入站/出站流量预警阈值 GB")"
+
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y curl tmux bc jq cron
+  systemctl enable --now cron >/dev/null 2>&1 || true
+
+  local monitor_file="$HOME/TG-check-notify.sh"
+  local ssh_file="$HOME/TG-SSH-check-notify.sh"
+  local monitor_url="https://raw.githubusercontent.com/kejilion/sh/main/TG-check-notify.sh"
+  local ssh_url="https://raw.githubusercontent.com/kejilion/sh/main/TG-SSH-check-notify.sh"
+
+  download_file "$monitor_url" "$monitor_file"
+  chmod +x "$monitor_file"
+
+  sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=$(shell_quote "$bot_token")|" "$monitor_file"
+  sed -i "s|^CHAT_ID=.*|CHAT_ID=$(shell_quote "$chat_id")|" "$monitor_file"
+  sed -i "s|^CPU_THRESHOLD=.*|CPU_THRESHOLD=$cpu_threshold|" "$monitor_file"
+  sed -i "s|^MEMORY_THRESHOLD=.*|MEMORY_THRESHOLD=$memory_threshold|" "$monitor_file"
+  sed -i "s|^DISK_THRESHOLD=.*|DISK_THRESHOLD=$disk_threshold|" "$monitor_file"
+  sed -i "s|^NETWORK_THRESHOLD_GB=.*|NETWORK_THRESHOLD_GB=$network_threshold|" "$monitor_file"
+  sed -i '/local CURRENT_VALUE/a\
+    if (( $(echo "$THRESHOLD <= 0" | bc -l) )); then\
+        return 0\
+    fi' "$monitor_file"
+  sed -i 's|echo "$RX_GB > $NETWORK_THRESHOLD_GB"|echo "$NETWORK_THRESHOLD_GB > 0 \&\& $RX_GB > $NETWORK_THRESHOLD_GB"|' "$monitor_file"
+  sed -i 's|echo "$TX_GB > $NETWORK_THRESHOLD_GB"|echo "$NETWORK_THRESHOLD_GB > 0 \&\& $TX_GB > $NETWORK_THRESHOLD_GB"|' "$monitor_file"
+
+  tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
+  tmux new -d -s TG-check-notify "$monitor_file"
+
+  crontab -l 2>/dev/null | grep -v 'TG-check-notify.sh' | crontab - 2>/dev/null || true
+  (crontab -l 2>/dev/null; echo "@reboot tmux new -d -s TG-check-notify '$monitor_file'") | crontab -
+
+  download_file "$ssh_url" "$ssh_file"
+  {
+    head -n 1 "$ssh_file"
+    printf "TELEGRAM_BOT_TOKEN=%s\n" "$(shell_quote "$bot_token")"
+    printf "CHAT_ID=%s\n" "$(shell_quote "$chat_id")"
+    tail -n +2 "$ssh_file"
+  } >"${ssh_file}.tmp"
+  mv "${ssh_file}.tmp" "$ssh_file"
+  chmod +x "$ssh_file"
+
+  if ! grep -qF "bash $ssh_file" "$HOME/.profile" 2>/dev/null; then
+    echo "bash $ssh_file" >> "$HOME/.profile"
+  fi
+
+  echo
+  echo "TG-bot预警系统已启动。"
+  echo "监控脚本：$monitor_file"
+  echo "SSH 登录通知脚本：$ssh_file"
+}
+
 allow_port() {
   require_root
   if ! command -v ufw >/dev/null 2>&1; then
@@ -742,6 +860,7 @@ main_menu() {
     echo
     echo "1. 优化 VPS"
     echo "2. 防火墙管理"
+    echo "3. TG-bot系统监控预警"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -758,6 +877,7 @@ main_menu() {
         finish_menu_action
         ;;
       2) refresh_screen; firewall_menu ;;
+      3) refresh_screen; setup_tg_monitoring ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
