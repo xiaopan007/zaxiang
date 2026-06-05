@@ -946,7 +946,7 @@ test_scripts_menu() {
     echo "32. spiritysdx 融合怪测评"
     echo "33. nodequality 融合怪测评"
     echo "------------------------"
-    echo "0. 返回主菜单"
+    echo "0. 返回上一级菜单"
     local choice
     read -r -p "请选择：" choice
 
