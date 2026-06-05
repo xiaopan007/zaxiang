@@ -684,6 +684,10 @@ EOF
   chmod +x "$output"
 }
 
+tg_notify_file() {
+  printf "%s\n" "$HOME/服务器告警.sh"
+}
+
 notify_threshold_value() {
   local file="$1"
   local name="$2"
@@ -718,7 +722,8 @@ ensure_tg_notify_dependencies() {
 
 configure_tg_notify_script() {
   local configure_monitor="${1:-false}"
-  local notify_file="$HOME/TG-notify.sh"
+  local notify_file
+  notify_file="$(tg_notify_file)"
 
   local bot_token chat_id existing_token existing_chat_id cpu_threshold memory_threshold disk_threshold network_threshold
   existing_token="$(tg_config_value "$notify_file" TELEGRAM_BOT_TOKEN)"
@@ -752,7 +757,7 @@ configure_tg_notify_script() {
 }
 
 tg_monitor_status_text() {
-  if tmux has-session -t TG-check-notify >/dev/null 2>&1 || crontab -l 2>/dev/null | grep -Eq 'TG-notify\.sh.*monitor|TG-check-notify\.sh'; then
+  if tmux has-session -t TG-check-notify >/dev/null 2>&1 || crontab -l 2>/dev/null | grep -Eq '服务器告警\.sh.*monitor|TG-notify\.sh.*monitor|TG-check-notify\.sh'; then
     echo "开启"
   else
     echo "关闭"
@@ -760,7 +765,7 @@ tg_monitor_status_text() {
 }
 
 tg_login_status_text() {
-  if grep -q 'TG-notify.sh login' "$HOME/.profile" 2>/dev/null; then
+  if grep -Eq '服务器告警\.sh login|TG-notify\.sh login' "$HOME/.profile" 2>/dev/null; then
     echo "开启"
   else
     echo "关闭"
@@ -771,12 +776,13 @@ enable_tg_monitor() {
   ensure_tg_notify_dependencies
   configure_tg_notify_script true
 
-  local notify_file="$HOME/TG-notify.sh"
+  local notify_file
+  notify_file="$(tg_notify_file)"
 
   tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
   tmux new -d -s TG-check-notify "$notify_file" monitor
 
-  crontab -l 2>/dev/null | grep -Ev 'TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
+  crontab -l 2>/dev/null | grep -Ev '服务器告警\.sh.*monitor|TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
   (crontab -l 2>/dev/null; echo "@reboot tmux new -d -s TG-check-notify '$notify_file' monitor") | crontab -
 
   echo "系统资源/流量报警已开启。"
@@ -785,7 +791,7 @@ enable_tg_monitor() {
 disable_tg_monitor() {
   require_root
   tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
-  crontab -l 2>/dev/null | grep -Ev 'TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
+  crontab -l 2>/dev/null | grep -Ev '服务器告警\.sh.*monitor|TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
   echo "系统资源/流量报警已关闭。"
 }
 
@@ -793,8 +799,9 @@ enable_tg_login_notify() {
   ensure_tg_notify_dependencies
   configure_tg_notify_script false
 
-  local notify_file="$HOME/TG-notify.sh"
-  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d' "$HOME/.profile" 2>/dev/null || true
+  local notify_file
+  notify_file="$(tg_notify_file)"
+  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d; /服务器告警.sh login/d' "$HOME/.profile" 2>/dev/null || true
   if ! grep -qF "bash $notify_file login" "$HOME/.profile" 2>/dev/null; then
     echo "bash $notify_file login" >> "$HOME/.profile"
   fi
@@ -804,7 +811,7 @@ enable_tg_login_notify() {
 
 disable_tg_login_notify() {
   require_root
-  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d' "$HOME/.profile" 2>/dev/null || true
+  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d; /服务器告警.sh login/d' "$HOME/.profile" 2>/dev/null || true
   echo "SSH 登录通知已关闭。"
 }
 
@@ -852,7 +859,7 @@ tg_notify_menu() {
   while true; do
     echo
     echo "TG-bot通知管理"
-    echo "通知脚本：$HOME/TG-notify.sh"
+    echo "通知脚本：$(tg_notify_file)"
     echo "1. 系统资源/流量报警：$(tg_monitor_status_text)"
     echo "2. SSH 登录通知：$(tg_login_status_text)"
     echo "0. 返回上一级菜单"
