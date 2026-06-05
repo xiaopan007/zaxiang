@@ -916,6 +916,19 @@ run_test_script_action() {
   "$@"
 }
 
+finish_test_script_action() {
+  echo
+  read -n 1 -s -r -p "按任意键返回上一级菜单..."
+  echo
+  refresh_screen
+}
+
+test_choice_action() {
+  refresh_screen
+  run_test_script_action "$@"
+  finish_test_script_action
+}
+
 test_scripts_menu() {
   while true; do
     echo
@@ -951,14 +964,14 @@ test_scripts_menu() {
     read -r -p "请选择：" choice
 
     case "$choice" in
-      1) refresh_screen; run_test_script_action "ChatGPT 解锁状态检测" bash -c 'bash <(curl -Ls https://cdn.jsdelivr.net/gh/missuo/OpenAI-Checker/openai.sh)'; finish_menu_action ;;
-      2) refresh_screen; run_test_script_action "Region 流媒体解锁测试" bash -c 'bash <(curl -L -s check.unlock.media)'; finish_menu_action ;;
-      3) refresh_screen; install_test_tool wget; run_test_script_action "yeahwu 流媒体解锁检测" bash -c 'wget -qO- https://github.com/yeahwu/check/raw/main/check.sh | bash'; finish_menu_action ;;
-      4) refresh_screen; run_test_script_action "xykt IP质量体检脚本" bash -c 'bash <(curl -Ls IP.Check.Place)'; finish_menu_action ;;
-      11) refresh_screen; install_test_tool wget; run_test_script_action "besttrace 三网回程延迟路由测试" bash -c 'wget -qO- git.io/besttrace | bash'; finish_menu_action ;;
-      12) refresh_screen; run_test_script_action "mtr_trace 三网回程线路测试" bash -c 'curl https://raw.githubusercontent.com/zhucaidan/mtr_trace/main/mtr_trace.sh | bash'; finish_menu_action ;;
-      13) refresh_screen; run_test_script_action "Superspeed 三网测速" bash -c 'bash <(curl -Lso- https://git.io/superspeed_uxh)'; finish_menu_action ;;
-      14) refresh_screen; run_test_script_action "nxtrace 快速回程测试脚本" bash -c 'curl nxtrace.org/nt | bash && nexttrace --fast-trace --tcp'; finish_menu_action ;;
+      1) test_choice_action "ChatGPT 解锁状态检测" bash -c 'bash <(curl -Ls https://cdn.jsdelivr.net/gh/missuo/OpenAI-Checker/openai.sh)' ;;
+      2) test_choice_action "Region 流媒体解锁测试" bash -c 'bash <(curl -L -s check.unlock.media)' ;;
+      3) install_test_tool wget; test_choice_action "yeahwu 流媒体解锁检测" bash -c 'wget -qO- https://github.com/yeahwu/check/raw/main/check.sh | bash' ;;
+      4) test_choice_action "xykt IP质量体检脚本" bash -c 'bash <(curl -Ls IP.Check.Place)' ;;
+      11) install_test_tool wget; test_choice_action "besttrace 三网回程延迟路由测试" bash -c 'wget -qO- git.io/besttrace | bash' ;;
+      12) test_choice_action "mtr_trace 三网回程线路测试" bash -c 'curl https://raw.githubusercontent.com/zhucaidan/mtr_trace/main/mtr_trace.sh | bash' ;;
+      13) test_choice_action "Superspeed 三网测速" bash -c 'bash <(curl -Lso- https://git.io/superspeed_uxh)' ;;
+      14) test_choice_action "nxtrace 快速回程测试脚本" bash -c 'curl nxtrace.org/nt | bash && nexttrace --fast-trace --tcp' ;;
       15)
         refresh_screen
         echo "可参考的 IP 列表"
@@ -983,16 +996,16 @@ test_scripts_menu() {
           curl nxtrace.org/nt | bash
           nexttrace "$testip"
         fi
-        finish_menu_action
+        finish_test_script_action
         ;;
-      16) refresh_screen; run_test_script_action "ludashi2020 三网线路测试" sh -c 'curl https://raw.githubusercontent.com/ludashi2020/backtrace/main/install.sh -sSf | sh'; finish_menu_action ;;
-      17) refresh_screen; run_test_script_action "i-abc 多功能测速脚本" bash -c 'bash <(curl -sL https://raw.githubusercontent.com/i-abc/Speedtest/main/speedtest.sh)'; finish_menu_action ;;
-      18) refresh_screen; run_test_script_action "NetQuality 网络质量体检脚本" bash -c 'bash <(curl -sL Net.Check.Place)'; finish_menu_action ;;
-      21) refresh_screen; ensure_benchmark_swap; run_test_script_action "yabs 性能测试" bash -c 'curl -sL yabs.sh | bash -s -- -i -5'; finish_menu_action ;;
-      22) refresh_screen; ensure_benchmark_swap; run_test_script_action "icu/gb5 CPU性能测试脚本" bash -c 'bash <(curl -sL bash.icu/gb5)'; finish_menu_action ;;
-      31) refresh_screen; run_test_script_action "bench 性能测试" bash -c 'curl -Lso- bench.sh | bash'; finish_menu_action ;;
-      32) refresh_screen; run_test_script_action "spiritysdx 融合怪测评" bash -c 'curl -L https://github.com/spiritLHLS/ecs/raw/main/ecs.sh -o ecs.sh && chmod +x ecs.sh && bash ecs.sh'; finish_menu_action ;;
-      33) refresh_screen; run_test_script_action "nodequality 融合怪测评" bash -c 'bash <(curl -sL https://run.NodeQuality.com)'; finish_menu_action ;;
+      16) test_choice_action "ludashi2020 三网线路测试" sh -c 'curl https://raw.githubusercontent.com/ludashi2020/backtrace/main/install.sh -sSf | sh' ;;
+      17) test_choice_action "i-abc 多功能测速脚本" bash -c 'bash <(curl -sL https://raw.githubusercontent.com/i-abc/Speedtest/main/speedtest.sh)' ;;
+      18) test_choice_action "NetQuality 网络质量体检脚本" bash -c 'bash <(curl -sL Net.Check.Place)' ;;
+      21) ensure_benchmark_swap; test_choice_action "yabs 性能测试" bash -c 'curl -sL yabs.sh | bash -s -- -i -5' ;;
+      22) ensure_benchmark_swap; test_choice_action "icu/gb5 CPU性能测试脚本" bash -c 'bash <(curl -sL bash.icu/gb5)' ;;
+      31) test_choice_action "bench 性能测试" bash -c 'curl -Lso- bench.sh | bash' ;;
+      32) test_choice_action "spiritysdx 融合怪测评" bash -c 'curl -L https://github.com/spiritLHLS/ecs/raw/main/ecs.sh -o ecs.sh && chmod +x ecs.sh && bash ecs.sh' ;;
+      33) test_choice_action "nodequality 融合怪测评" bash -c 'bash <(curl -sL https://run.NodeQuality.com)' ;;
       0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
