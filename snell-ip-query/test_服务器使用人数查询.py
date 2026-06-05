@@ -290,8 +290,7 @@ Status: active
         with mock.patch.object(MODULE, "is_monitor_enabled", return_value=False), \
             mock.patch.object(MODULE, "enable_new_source_monitor", return_value=(True, "自动扫描已开启。")) as enable, \
             mock.patch.object(MODULE, "refresh_screen"), \
-            mock.patch.object(MODULE.time, "sleep"), \
-            mock.patch("builtins.input", side_effect=["1", "香港中转1", "token", "chat", "", "0"]), \
+            mock.patch("builtins.input", side_effect=["1", "香港中转1", "token", "chat", "", "0", "0"]), \
             redirect_stdout(output):
             MODULE.new_source_notify_menu("49376")
 
@@ -300,6 +299,7 @@ Status: active
         self.assertIn("当前状态：已关闭", text)
         self.assertIn("1. 开启自动扫描", text)
         self.assertIn("2. 关闭自动扫描", text)
+        self.assertIn("正在开启自动扫描...", text)
 
 
 if __name__ == "__main__":

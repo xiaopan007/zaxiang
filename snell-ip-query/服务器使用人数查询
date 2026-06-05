@@ -1260,15 +1260,17 @@ def new_source_notify_menu(port):
                 refresh_screen()
                 continue
 
+            print("正在开启自动扫描...", flush=True)
             ok, message = enable_new_source_monitor(port, server_name, bot_token, chat_id, interval)
             print(message)
-            time.sleep(1)
+            wait_return()
             refresh_screen()
             continue
         if choice == "2":
+            print("正在关闭自动扫描...", flush=True)
             _ok, message = disable_monitor_timer()
             print(message)
-            time.sleep(1)
+            wait_return()
             refresh_screen()
             continue
 
