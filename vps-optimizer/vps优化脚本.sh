@@ -79,6 +79,11 @@ refresh_screen() {
   fi
 }
 
+finish_menu_action() {
+  sleep 1
+  refresh_screen
+}
+
 shell_quote() {
   printf "'%s'" "$(printf "%s" "$1" | sed "s/'/'\"'\"'/g")"
 }
@@ -516,7 +521,10 @@ allow_port() {
   fi
 
   local port
-  read -r -p "请输入放行的端口号：" port
+  read -r -p "请输入放行的端口号，0 返回上一级菜单：" port
+  if [[ "$port" == "0" ]]; then
+    return 2
+  fi
   if ! validate_port "$port"; then
     echo "端口号无效，必须是 1-65535。"
     return 1
@@ -541,10 +549,42 @@ list_allowed_ports() {
   '
 }
 
+print_allowed_ports() {
+  local -a ports=()
+  local line
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && ports+=("$line")
+  done < <(list_allowed_ports)
+
+  if [[ ${#ports[@]} -eq 0 ]]; then
+    echo "当前没有放行端口规则。"
+    return 0
+  fi
+
+  local i
+  for i in "${!ports[@]}"; do
+    printf "%d. %s\n" "$((i + 1))" "${ports[$i]}"
+  done
+}
+
+manage_allow_port() {
+  while true; do
+    echo
+    echo "当前放行端口："
+    print_allowed_ports
+    echo
+    allow_port
+    local result=$?
+    if [[ $result -eq 2 ]]; then
+      refresh_screen
+      return 0
+    fi
+    finish_menu_action
+  done
+}
+
 delete_allowed_port() {
   require_root
-  echo "删除放行端口"
-  echo
   if ! command -v ufw >/dev/null 2>&1; then
     echo "未找到 ufw，请先进入 2 防火墙管理，选择 1 安装 UFW 防火墙。"
     return 1
@@ -559,7 +599,7 @@ delete_allowed_port() {
   if [[ ${#ports[@]} -eq 0 ]]; then
     echo "当前没有可删除的放行端口规则。"
     read -r -p "0 返回上一级菜单：" _back
-    return 0
+    return 2
   fi
 
   local i
@@ -570,7 +610,7 @@ delete_allowed_port() {
   local selected
   read -r -p "输入要删除的序号，0 返回上一级菜单：" selected
   if [[ "$selected" == "0" ]]; then
-    return 0
+    return 2
   fi
   if ! [[ "$selected" =~ ^[0-9]+$ ]] || (( selected < 1 || selected > ${#ports[@]} )); then
     echo "无效序号。"
@@ -580,6 +620,28 @@ delete_allowed_port() {
   local port="${ports[$((selected - 1))]}"
   ufw --force delete allow "$port" || true
   echo "已删除放行端口：$port"
+}
+
+manage_delete_allowed_port() {
+  while true; do
+    echo
+    echo "删除放行端口"
+    echo
+    if ! command -v ufw >/dev/null 2>&1; then
+      echo "未找到 ufw，请先进入 2 防火墙管理，选择 1 安装 UFW 防火墙。"
+      read -r -p "0 返回上一级菜单：" _back
+      refresh_screen
+      return 0
+    fi
+
+    delete_allowed_port
+    local result=$?
+    if [[ $result -eq 2 ]]; then
+      refresh_screen
+      return 0
+    fi
+    finish_menu_action
+  done
 }
 
 manage_base_firewall() {
@@ -593,8 +655,8 @@ manage_base_firewall() {
     read -r -p "请选择：" choice
 
     case "$choice" in
-      1) refresh_screen; install_base_firewall ;;
-      2) refresh_screen; disable_base_firewall ;;
+      1) refresh_screen; install_base_firewall; finish_menu_action ;;
+      2) refresh_screen; disable_base_firewall; finish_menu_action ;;
       0) refresh_screen; return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -612,8 +674,8 @@ manage_udp_all_in() {
     read -r -p "请选择：" choice
 
     case "$choice" in
-      1) refresh_screen; enable_udp_all_in ;;
-      2) refresh_screen; disable_udp_all_in ;;
+      1) refresh_screen; enable_udp_all_in; finish_menu_action ;;
+      2) refresh_screen; disable_udp_all_in; finish_menu_action ;;
       0) refresh_screen; return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -631,8 +693,8 @@ manage_fail2ban() {
     read -r -p "请选择：" choice
 
     case "$choice" in
-      1) refresh_screen; install_fail2ban_ssh_guard ;;
-      2) refresh_screen; disable_fail2ban_ssh_guard ;;
+      1) refresh_screen; install_fail2ban_ssh_guard; finish_menu_action ;;
+      2) refresh_screen; disable_fail2ban_ssh_guard; finish_menu_action ;;
       0) refresh_screen; return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -645,6 +707,8 @@ firewall_menu() {
     echo "1. UFW 防火墙管理"
     echo "2. 全部 UDP 入站放行管理"
     echo "3. SSH 防暴力破解管理"
+    echo "4. 加入放行端口"
+    echo "5. 删除放行端口"
     echo "0. 返回上一级菜单"
     local choice
     read -r -p "请选择：" choice
@@ -653,6 +717,8 @@ firewall_menu() {
       1) refresh_screen; manage_base_firewall ;;
       2) refresh_screen; manage_udp_all_in ;;
       3) refresh_screen; manage_fail2ban ;;
+      4) refresh_screen; manage_allow_port ;;
+      5) refresh_screen; manage_delete_allowed_port ;;
       0) refresh_screen; return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -666,8 +732,6 @@ main_menu() {
     echo
     echo "1. 优化 VPS"
     echo "2. 防火墙管理"
-    echo "3. 加入放行端口"
-    echo "4. 删除放行端口"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -682,8 +746,6 @@ main_menu() {
         exit 0
         ;;
       2) refresh_screen; firewall_menu ;;
-      3) refresh_screen; allow_port ;;
-      4) refresh_screen; delete_allowed_port ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
