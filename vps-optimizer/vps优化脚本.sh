@@ -758,17 +758,17 @@ configure_tg_notify_script() {
 
 tg_monitor_status_text() {
   if tmux has-session -t TG-check-notify >/dev/null 2>&1 || crontab -l 2>/dev/null | grep -Eq '服务器告警\.sh.*monitor|TG-notify\.sh.*monitor|TG-check-notify\.sh'; then
-    echo "开启"
+    echo "已开启"
   else
-    echo "关闭"
+    echo "已关闭"
   fi
 }
 
 tg_login_status_text() {
   if grep -Eq '服务器告警\.sh login|TG-notify\.sh login' "$HOME/.profile" 2>/dev/null; then
-    echo "开启"
+    echo "已开启"
   else
-    echo "关闭"
+    echo "已关闭"
   fi
 }
 
@@ -813,6 +813,15 @@ disable_tg_login_notify() {
   require_root
   sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d; /服务器告警.sh login/d' "$HOME/.profile" 2>/dev/null || true
   echo "SSH 登录通知已关闭。"
+}
+
+clear_telegram_config() {
+  require_root
+  tmux kill-session -t TG-check-notify >/dev/null 2>&1 || true
+  crontab -l 2>/dev/null | grep -Ev '服务器告警\.sh.*monitor|TG-notify\.sh.*monitor|TG-check-notify\.sh' | crontab - 2>/dev/null || true
+  sed -i '/TG-SSH-check-notify.sh/d; /TG-notify.sh login/d; /服务器告警.sh login/d' "$HOME/.profile" 2>/dev/null || true
+  rm -f "$(tg_notify_file)" "$HOME/TG-notify.sh" "$HOME/TG-check-notify.sh" "$HOME/TG-SSH-check-notify.sh"
+  echo "Telegram 配置信息已清除。"
 }
 
 manage_tg_monitor() {
@@ -860,8 +869,9 @@ tg_notify_menu() {
     echo
     echo "TG-bot通知管理"
     echo "通知脚本：$(tg_notify_file)"
-    echo "1. 系统资源/流量报警：$(tg_monitor_status_text)"
-    echo "2. SSH 登录通知：$(tg_login_status_text)"
+    echo "1. 系统资源/流量报警"
+    echo "2. SSH 登录通知"
+    echo "3. Telegram 清除配置信息"
     echo "0. 返回上一级菜单"
     local choice
     read -r -p "请选择：" choice
@@ -869,6 +879,120 @@ tg_notify_menu() {
     case "$choice" in
       1) refresh_screen; manage_tg_monitor ;;
       2) refresh_screen; manage_tg_login_notify ;;
+      3) refresh_screen; clear_telegram_config; finish_menu_action ;;
+      0) return 0 ;;
+      *) echo "无效选项。" ;;
+    esac
+  done
+}
+
+install_test_tool() {
+  local cmd="$1"
+  local package="${2:-$1}"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    return 0
+  fi
+  require_root
+  detect_pkg_mgr >/dev/null
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y "$package"
+}
+
+ensure_benchmark_swap() {
+  local swap_total
+  swap_total="$(free -m | awk 'NR==3{print $2}')"
+  if [[ "${swap_total:-0}" =~ ^[0-9]+$ ]] && (( swap_total > 0 )); then
+    return 0
+  fi
+  echo "未检测到 swap，正在创建用于性能测试的 swap..."
+  setup_swap
+}
+
+run_test_script_action() {
+  local title="$1"
+  shift
+  echo "$title"
+  "$@"
+}
+
+test_scripts_menu() {
+  while true; do
+    echo
+    echo "测试脚本合集"
+    echo "------------------------"
+    echo "IP及解锁状态检测"
+    echo "1. ChatGPT 解锁状态检测"
+    echo "2. Region 流媒体解锁测试"
+    echo "3. yeahwu 流媒体解锁检测"
+    echo "4. xykt IP质量体检脚本"
+    echo "------------------------"
+    echo "网络线路测速"
+    echo "11. besttrace 三网回程延迟路由测试"
+    echo "12. mtr_trace 三网回程线路测试"
+    echo "13. Superspeed 三网测速"
+    echo "14. nxtrace 快速回程测试脚本"
+    echo "15. nxtrace 指定IP回程测试脚本"
+    echo "16. ludashi2020 三网线路测试"
+    echo "17. i-abc 多功能测速脚本"
+    echo "18. NetQuality 网络质量体检脚本"
+    echo "------------------------"
+    echo "硬件性能测试"
+    echo "21. yabs 性能测试"
+    echo "22. icu/gb5 CPU性能测试脚本"
+    echo "------------------------"
+    echo "综合性测试"
+    echo "31. bench 性能测试"
+    echo "32. spiritysdx 融合怪测评"
+    echo "33. nodequality 融合怪测评"
+    echo "------------------------"
+    echo "0. 返回主菜单"
+    local choice
+    read -r -p "请选择：" choice
+
+    case "$choice" in
+      1) refresh_screen; run_test_script_action "ChatGPT 解锁状态检测" bash -c 'bash <(curl -Ls https://cdn.jsdelivr.net/gh/missuo/OpenAI-Checker/openai.sh)'; finish_menu_action ;;
+      2) refresh_screen; run_test_script_action "Region 流媒体解锁测试" bash -c 'bash <(curl -L -s check.unlock.media)'; finish_menu_action ;;
+      3) refresh_screen; install_test_tool wget; run_test_script_action "yeahwu 流媒体解锁检测" bash -c 'wget -qO- https://github.com/yeahwu/check/raw/main/check.sh | bash'; finish_menu_action ;;
+      4) refresh_screen; run_test_script_action "xykt IP质量体检脚本" bash -c 'bash <(curl -Ls IP.Check.Place)'; finish_menu_action ;;
+      11) refresh_screen; install_test_tool wget; run_test_script_action "besttrace 三网回程延迟路由测试" bash -c 'wget -qO- git.io/besttrace | bash'; finish_menu_action ;;
+      12) refresh_screen; run_test_script_action "mtr_trace 三网回程线路测试" bash -c 'curl https://raw.githubusercontent.com/zhucaidan/mtr_trace/main/mtr_trace.sh | bash'; finish_menu_action ;;
+      13) refresh_screen; run_test_script_action "Superspeed 三网测速" bash -c 'bash <(curl -Lso- https://git.io/superspeed_uxh)'; finish_menu_action ;;
+      14) refresh_screen; run_test_script_action "nxtrace 快速回程测试脚本" bash -c 'curl nxtrace.org/nt | bash && nexttrace --fast-trace --tcp'; finish_menu_action ;;
+      15)
+        refresh_screen
+        echo "可参考的 IP 列表"
+        echo "北京电信: 219.141.136.12"
+        echo "北京联通: 202.106.50.1"
+        echo "北京移动: 221.179.155.161"
+        echo "上海电信: 202.96.209.133"
+        echo "上海联通: 210.22.97.1"
+        echo "上海移动: 211.136.112.200"
+        echo "广州电信: 58.60.188.222"
+        echo "广州联通: 210.21.196.6"
+        echo "广州移动: 120.196.165.24"
+        echo "成都电信: 61.139.2.69"
+        echo "成都联通: 119.6.6.6"
+        echo "成都移动: 211.137.96.205"
+        echo "湖南电信: 36.111.200.100"
+        echo "湖南联通: 42.48.16.100"
+        echo "湖南移动: 39.134.254.6"
+        local testip
+        read -r -p "输入一个指定 IP：" testip
+        if [[ -n "$testip" ]]; then
+          curl nxtrace.org/nt | bash
+          nexttrace "$testip"
+        fi
+        finish_menu_action
+        ;;
+      16) refresh_screen; run_test_script_action "ludashi2020 三网线路测试" sh -c 'curl https://raw.githubusercontent.com/ludashi2020/backtrace/main/install.sh -sSf | sh'; finish_menu_action ;;
+      17) refresh_screen; run_test_script_action "i-abc 多功能测速脚本" bash -c 'bash <(curl -sL https://raw.githubusercontent.com/i-abc/Speedtest/main/speedtest.sh)'; finish_menu_action ;;
+      18) refresh_screen; run_test_script_action "NetQuality 网络质量体检脚本" bash -c 'bash <(curl -sL Net.Check.Place)'; finish_menu_action ;;
+      21) refresh_screen; ensure_benchmark_swap; run_test_script_action "yabs 性能测试" bash -c 'curl -sL yabs.sh | bash -s -- -i -5'; finish_menu_action ;;
+      22) refresh_screen; ensure_benchmark_swap; run_test_script_action "icu/gb5 CPU性能测试脚本" bash -c 'bash <(curl -sL bash.icu/gb5)'; finish_menu_action ;;
+      31) refresh_screen; run_test_script_action "bench 性能测试" bash -c 'curl -Lso- bench.sh | bash'; finish_menu_action ;;
+      32) refresh_screen; run_test_script_action "spiritysdx 融合怪测评" bash -c 'curl -L https://github.com/spiritLHLS/ecs/raw/main/ecs.sh -o ecs.sh && chmod +x ecs.sh && bash ecs.sh'; finish_menu_action ;;
+      33) refresh_screen; run_test_script_action "nodequality 融合怪测评" bash -c 'bash <(curl -sL https://run.NodeQuality.com)'; finish_menu_action ;;
       0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
@@ -1100,6 +1224,7 @@ main_menu() {
     echo "1. 优化 VPS"
     echo "2. 防火墙管理"
     echo "4. TG-bot通知管理"
+    echo "5. 测试脚本合集"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -1114,9 +1239,10 @@ main_menu() {
         FINISH_ENABLED=false
         echo "优化完成，返回主菜单。"
         finish_menu_action
-        ;;
+      ;;
       2) refresh_screen; firewall_menu ;;
       4) refresh_screen; tg_notify_menu ;;
+      5) refresh_screen; test_scripts_menu ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
