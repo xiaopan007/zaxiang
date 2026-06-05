@@ -301,6 +301,22 @@ Status: active
         self.assertIn("2. 关闭自动扫描", text)
         self.assertIn("正在开启自动扫描...", text)
 
+    def test_refresh_screen_does_not_clear_terminal_for_screen_reader_flow(self):
+        class FakeTTY(io.StringIO):
+            def isatty(self):
+                return True
+
+        output = FakeTTY()
+
+        with mock.patch.object(MODULE.sys, "stdout", output), \
+            mock.patch.dict(MODULE.os.environ, {"TERM": "xterm"}, clear=False), \
+            mock.patch.object(MODULE.shutil, "which", return_value="/usr/bin/clear"), \
+            mock.patch.object(MODULE.subprocess, "call") as call:
+            MODULE.refresh_screen()
+
+        call.assert_not_called()
+        self.assertEqual(output.getvalue(), "\n")
+
 
 if __name__ == "__main__":
     unittest.main()
