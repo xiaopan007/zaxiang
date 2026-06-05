@@ -144,6 +144,20 @@ class SnellUsageQueryTests(unittest.TestCase):
         self.assertIn("1. 河北石家庄电信 1.2.3.4 已封禁协议：tcp/udp", output.getvalue())
         self.assertIn("1. 江苏无锡移动 5.6.7.8 已封禁协议：tcp", output.getvalue())
 
+    def test_unblock_menu_looks_up_location_for_inactive_blocked_ips(self):
+        blocked = {"1.2.3.4": {"rules": [1, 2], "protocols": ["tcp", "udp"]}}
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "get_blocked_ip_entries", return_value=blocked), \
+            mock.patch.object(MODULE, "get_active_ip_details", return_value={}), \
+            mock.patch.object(MODULE, "lookup_location_and_isp", return_value=("广东广州", "移动")) as lookup, \
+            mock.patch("builtins.input", return_value="0"), \
+            redirect_stdout(output):
+            MODULE.unblock_by_ip("49376")
+
+        lookup.assert_called_once_with("1.2.3.4")
+        self.assertIn("1. 广东广州移动 1.2.3.4 已封禁协议：tcp/udp", output.getvalue())
+
     def test_parse_ufw_denies_groups_tcp_and_udp_by_ip(self):
         output = """
 Status: active

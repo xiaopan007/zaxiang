@@ -546,6 +546,15 @@ def format_query_detail_lines(details):
     return lines
 
 
+def get_blocked_ip_label(ip, active_details):
+    detail = active_details.get(ip)
+    if detail:
+        return detail.get("location", "地区未知") + detail.get("isp", "运营商未知")
+
+    location, isp = lookup_location_and_isp(ip)
+    return location + isp
+
+
 def build_block_commands(ip, port, firewall_kind):
     if firewall_kind == "ufw":
         return [
@@ -913,11 +922,7 @@ def unblock_by_ip(port):
         active_details = get_active_ip_details(port)
         sorted_ips = sorted(blocked_entries)
         for index, ip in enumerate(sorted_ips, start=1):
-            detail = active_details.get(ip)
-            if detail:
-                label = detail["location"] + detail["isp"]
-            else:
-                label = "地区未知运营商未知"
+            label = get_blocked_ip_label(ip, active_details)
             protocols = "/".join(blocked_entries[ip].get("protocols", []))
             print(f"{index}. {label} {ip} 已封禁协议：{protocols}")
 
