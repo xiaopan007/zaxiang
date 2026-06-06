@@ -408,6 +408,20 @@ Status: active
         self.assertEqual(result, 0)
         clear.assert_called_once()
 
+    def test_main_menu_returns_after_self_update_when_no_restart_happens(self):
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "self_update", return_value=0) as update, \
+            mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch.object(MODULE, "clear_screen_on_exit") as clear, \
+            mock.patch("builtins.input", side_effect=["00", "0", "0"]), \
+            redirect_stdout(output):
+            result = MODULE.show_menu("49376")
+
+        self.assertEqual(result, 0)
+        update.assert_called_once()
+        clear.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

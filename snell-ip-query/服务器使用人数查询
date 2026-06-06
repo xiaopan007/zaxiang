@@ -1149,7 +1149,10 @@ def show_menu(port):
         choice = input("请选择：").strip().lower()
 
         if choice == "00":
-            return self_update()
+            self_update()
+            wait_return()
+            refresh_screen()
+            continue
         if choice in ("0", "q", "quit", "exit"):
             clear_screen_on_exit()
             return 0
