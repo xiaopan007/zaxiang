@@ -36,6 +36,9 @@ MONITOR_DIR = os.environ.get("SNELL_QUERY_MONITOR_DIR", "/root/.snell-ip-query")
 MONITOR_CONFIG_PATH = os.environ.get("SNELL_QUERY_MONITOR_CONFIG", os.path.join(MONITOR_DIR, "config.json"))
 MONITOR_STATE_PATH = os.environ.get("SNELL_QUERY_MONITOR_STATE", os.path.join(MONITOR_DIR, "state.json"))
 MONITOR_SERVICE_NAME = os.environ.get("SNELL_QUERY_MONITOR_SERVICE", "snell-new-source-notify")
+UPDATE_RESTARTED = 0
+UPDATE_FAILED = 1
+UPDATE_ALREADY_LATEST = 2
 
 
 def run_command(args):
@@ -153,7 +156,7 @@ def self_update():
             current_data = None
         if current_data == data:
             print("当前已是最新版本")
-            return 0
+            return UPDATE_ALREADY_LATEST
         with open(temp_path, "wb") as f:
             f.write(data)
         os.chmod(temp_path, 0o755)
@@ -165,11 +168,11 @@ def self_update():
         except OSError:
             pass
         print("更新失败：" + str(exc))
-        return 1
+        return UPDATE_FAILED
 
     print("更新完成，正在重新启动脚本...")
     os.execv(script_path, [script_path])
-    return 0
+    return UPDATE_RESTARTED
 
 
 def strip_inline_comment(line):
@@ -1149,8 +1152,9 @@ def show_menu(port):
         choice = input("请选择：").strip().lower()
 
         if choice == "00":
-            self_update()
-            wait_return()
+            update_result = self_update()
+            if update_result == UPDATE_FAILED:
+                wait_return()
             refresh_screen()
             continue
         if choice in ("0", "q", "quit", "exit"):

@@ -236,7 +236,7 @@ Status: active
                 redirect_stdout(output):
                 result = MODULE.self_update()
 
-            self.assertEqual(result, 0)
+            self.assertEqual(result, MODULE.UPDATE_ALREADY_LATEST)
             self.assertEqual(output.getvalue().strip(), "当前已是最新版本")
             execv.assert_not_called()
             self.assertFalse(Path(str(script) + ".new").exists())
@@ -408,18 +408,20 @@ Status: active
         self.assertEqual(result, 0)
         clear.assert_called_once()
 
-    def test_main_menu_returns_after_self_update_when_no_restart_happens(self):
+    def test_main_menu_returns_immediately_after_latest_update_check(self):
         output = io.StringIO()
 
-        with mock.patch.object(MODULE, "self_update", return_value=0) as update, \
+        with mock.patch.object(MODULE, "self_update", return_value=MODULE.UPDATE_ALREADY_LATEST) as update, \
             mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch.object(MODULE, "wait_return") as wait_return, \
             mock.patch.object(MODULE, "clear_screen_on_exit") as clear, \
-            mock.patch("builtins.input", side_effect=["00", "0", "0"]), \
+            mock.patch("builtins.input", side_effect=["00", "0"]), \
             redirect_stdout(output):
             result = MODULE.show_menu("49376")
 
         self.assertEqual(result, 0)
         update.assert_called_once()
+        wait_return.assert_not_called()
         clear.assert_called_once()
 
 
