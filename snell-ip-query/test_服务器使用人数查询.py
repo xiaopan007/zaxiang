@@ -273,7 +273,22 @@ Status: active
             self.assertIn("更新完成，正在重新启动脚本...", output.getvalue())
             sleep.assert_called_once_with(1)
             refresh.assert_called_once()
+            self.assertEqual(MODULE.os.environ.get("SNELL_QUERY_CLEAR_ON_START"), "1")
             execv.assert_called_once_with(str(script), [str(script)])
+
+    def test_main_clears_screen_after_update_restart_marker(self):
+        with mock.patch.dict(MODULE.os.environ, {"SNELL_QUERY_CLEAR_ON_START": "1"}, clear=False), \
+            mock.patch.object(MODULE, "get_snell_port", return_value="49376"), \
+            mock.patch.object(MODULE.sys.stdin, "isatty", return_value=True), \
+            mock.patch.object(MODULE, "ensure_shortcut_installed"), \
+            mock.patch.object(MODULE, "refresh_screen") as refresh, \
+            mock.patch.object(MODULE, "show_menu", return_value=0) as show_menu:
+            result = MODULE.main()
+
+        self.assertEqual(result, 0)
+        refresh.assert_called_once()
+        show_menu.assert_called_once_with("49376")
+        self.assertNotIn("SNELL_QUERY_CLEAR_ON_START", MODULE.os.environ)
 
     def test_source_key_ignores_ip_and_uses_location_and_isp(self):
         self.assertEqual(MODULE.build_source_key("河北石家庄", "电信"), "河北石家庄|电信")

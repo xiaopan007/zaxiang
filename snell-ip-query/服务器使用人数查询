@@ -172,6 +172,7 @@ def self_update():
 
     print("更新完成，正在重新启动脚本...")
     time.sleep(1)
+    os.environ["SNELL_QUERY_CLEAR_ON_START"] = "1"
     refresh_screen()
     os.execv(script_path, [script_path])
     return UPDATE_RESTARTED
@@ -1106,6 +1107,9 @@ def main():
     if not sys.stdin.isatty():
         print_summary(port)
         return 0
+
+    if os.environ.pop("SNELL_QUERY_CLEAR_ON_START", "") == "1":
+        refresh_screen()
 
     ensure_shortcut_installed()
     return show_menu(port)
