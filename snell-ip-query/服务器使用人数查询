@@ -171,6 +171,7 @@ def self_update():
         return UPDATE_FAILED
 
     print("更新完成，正在重新启动脚本...")
+    time.sleep(1)
     os.execv(script_path, [script_path])
     return UPDATE_RESTARTED
 

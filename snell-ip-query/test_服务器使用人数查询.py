@@ -241,6 +241,38 @@ Status: active
             execv.assert_not_called()
             self.assertFalse(Path(str(script) + ".new").exists())
 
+    def test_self_update_pauses_before_restart_after_successful_update(self):
+        class FakeResponse:
+            def __init__(self, data):
+                self.data = data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return self.data
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = Path(temp_dir) / "服务器使用人数查询"
+            script.write_bytes(b"old")
+            output = io.StringIO()
+
+            with mock.patch.object(MODULE.sys, "argv", [str(script)]), \
+                mock.patch.object(MODULE.urllib.request, "urlopen", return_value=FakeResponse(b"new")), \
+                mock.patch.object(MODULE.time, "sleep") as sleep, \
+                mock.patch.object(MODULE.os, "execv") as execv, \
+                redirect_stdout(output):
+                result = MODULE.self_update()
+
+            self.assertEqual(result, MODULE.UPDATE_RESTARTED)
+            self.assertEqual(script.read_bytes(), b"new")
+            self.assertIn("更新完成，正在重新启动脚本...", output.getvalue())
+            sleep.assert_called_once_with(1)
+            execv.assert_called_once_with(str(script), [str(script)])
+
     def test_source_key_ignores_ip_and_uses_location_and_isp(self):
         self.assertEqual(MODULE.build_source_key("河北石家庄", "电信"), "河北石家庄|电信")
 
