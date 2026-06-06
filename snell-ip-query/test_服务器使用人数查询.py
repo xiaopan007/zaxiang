@@ -414,6 +414,7 @@ Status: active
         with mock.patch.object(MODULE, "self_update", return_value=MODULE.UPDATE_ALREADY_LATEST) as update, \
             mock.patch.object(MODULE, "refresh_screen"), \
             mock.patch.object(MODULE, "wait_return") as wait_return, \
+            mock.patch.object(MODULE.time, "sleep") as sleep, \
             mock.patch.object(MODULE, "clear_screen_on_exit") as clear, \
             mock.patch("builtins.input", side_effect=["00", "0"]), \
             redirect_stdout(output):
@@ -422,6 +423,7 @@ Status: active
         self.assertEqual(result, 0)
         update.assert_called_once()
         wait_return.assert_not_called()
+        sleep.assert_called_once_with(1)
         clear.assert_called_once()
 
 

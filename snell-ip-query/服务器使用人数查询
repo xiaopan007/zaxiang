@@ -1155,6 +1155,8 @@ def show_menu(port):
             update_result = self_update()
             if update_result == UPDATE_FAILED:
                 wait_return()
+            elif update_result == UPDATE_ALREADY_LATEST:
+                time.sleep(1)
             refresh_screen()
             continue
         if choice in ("0", "q", "quit", "exit"):
