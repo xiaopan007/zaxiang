@@ -129,6 +129,12 @@ self_update() {
     return 1
   fi
 
+  if cmp -s "$temp_path" "$script_path"; then
+    rm -f "$temp_path"
+    echo "当前已是最新版本，无需更新。"
+    return 0
+  fi
+
   chmod +x "$temp_path"
   mv "$temp_path" "$script_path"
   echo "更新完成，正在重新启动脚本..."
