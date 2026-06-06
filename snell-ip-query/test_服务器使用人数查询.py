@@ -263,6 +263,7 @@ Status: active
             with mock.patch.object(MODULE.sys, "argv", [str(script)]), \
                 mock.patch.object(MODULE.urllib.request, "urlopen", return_value=FakeResponse(b"new")), \
                 mock.patch.object(MODULE.time, "sleep") as sleep, \
+                mock.patch.object(MODULE, "refresh_screen") as refresh, \
                 mock.patch.object(MODULE.os, "execv") as execv, \
                 redirect_stdout(output):
                 result = MODULE.self_update()
@@ -271,6 +272,7 @@ Status: active
             self.assertEqual(script.read_bytes(), b"new")
             self.assertIn("更新完成，正在重新启动脚本...", output.getvalue())
             sleep.assert_called_once_with(1)
+            refresh.assert_called_once()
             execv.assert_called_once_with(str(script), [str(script)])
 
     def test_source_key_ignores_ip_and_uses_location_and_isp(self):
