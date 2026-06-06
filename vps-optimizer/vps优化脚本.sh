@@ -582,16 +582,11 @@ DISK_THRESHOLD=$disk_threshold
 NETWORK_THRESHOLD_GB=$network_threshold
 
 get_machine_label() {
-  local country isp_info ipv4_address masked_ip
   if [[ -n "\${SERVER_DISPLAY_NAME:-}" ]]; then
     echo "\$SERVER_DISPLAY_NAME"
     return 0
   fi
-  country=\$(curl -fsS ipinfo.io/country 2>/dev/null || echo "未知")
-  isp_info=\$(curl -fsS ipinfo.io/org 2>/dev/null | sed -e 's/"//g' | awk -F' ' '{print \$2}' || echo "未知")
-  ipv4_address=\$(curl -fsS ipv4.ip.sb 2>/dev/null || echo "0.0.0.0")
-  masked_ip=\$(echo "\$ipv4_address" | awk -F'.' '{print "*."\$3"."\$4}')
-  echo "\${isp_info:-未知}-\${country:-未知}-\${masked_ip:-*.0.0}"
+  hostname 2>/dev/null || echo "服务器"
 }
 
 send_tg_notification() {
@@ -635,7 +630,7 @@ check_and_notify() {
     return 0
   fi
   if (( \$(echo "\$usage > \$threshold" | bc -l) )); then
-    send_tg_notification "警告：\${machine_label} 的\${type}已达到 \${usage}%，超过阈值 \${threshold}%。"
+    send_tg_notification "警告：\${machine_label} \${type}已达到 \${usage}%，超过阈值 \${threshold}%。"
   fi
 }
 
@@ -654,10 +649,10 @@ monitor_loop() {
     check_and_notify "\$disk_usage" "硬盘使用情况" "\$DISK_THRESHOLD" "\$machine_label"
 
     if (( \$(echo "\$NETWORK_THRESHOLD_GB > 0 && \$rx_gb > \$NETWORK_THRESHOLD_GB" | bc -l) )); then
-      send_tg_notification "警告：\${machine_label} 的入站流量使用情况已达到 \${rx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
+      send_tg_notification "警告：\${machine_label} 入站流量使用情况已达到 \${rx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
     fi
     if (( \$(echo "\$NETWORK_THRESHOLD_GB > 0 && \$tx_gb > \$NETWORK_THRESHOLD_GB" | bc -l) )); then
-      send_tg_notification "警告：\${machine_label} 的出站流量使用情况已达到 \${tx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
+      send_tg_notification "警告：\${machine_label} 出站流量使用情况已达到 \${tx_gb}GB，超过阈值 \${NETWORK_THRESHOLD_GB}GB。"
     fi
 
     sleep 300
