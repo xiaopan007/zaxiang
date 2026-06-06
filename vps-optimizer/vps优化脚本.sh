@@ -121,9 +121,17 @@ self_update() {
   fi
 
   if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -H "Accept: application/vnd.github.raw" -H "Cache-Control: no-cache" "$update_url" -o "$temp_path"
+    if ! curl -fsSL -H "Accept: application/vnd.github.raw" -H "Cache-Control: no-cache" "$update_url" -o "$temp_path"; then
+      rm -f "$temp_path"
+      echo "更新失败：无法下载最新版脚本。请根据上方错误信息检查网络、DNS、代理或 GitHub 访问。"
+      return 1
+    fi
   elif command -v wget >/dev/null 2>&1; then
-    wget --header="Accept: application/vnd.github.raw" --header="Cache-Control: no-cache" -qO "$temp_path" "$update_url"
+    if ! wget --header="Accept: application/vnd.github.raw" --header="Cache-Control: no-cache" -O "$temp_path" "$update_url"; then
+      rm -f "$temp_path"
+      echo "更新失败：无法下载最新版脚本。请根据上方错误信息检查网络、DNS、代理或 GitHub 访问。"
+      return 1
+    fi
   else
     echo "更新失败：未找到 curl 或 wget。"
     return 1
