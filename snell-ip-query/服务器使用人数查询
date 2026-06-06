@@ -146,6 +146,14 @@ def self_update():
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             data = response.read()
+        try:
+            with open(script_path, "rb") as f:
+                current_data = f.read()
+        except OSError:
+            current_data = None
+        if current_data == data:
+            print("当前已是最新版本")
+            return 0
         with open(temp_path, "wb") as f:
             f.write(data)
         os.chmod(temp_path, 0o755)

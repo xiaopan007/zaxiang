@@ -211,6 +211,36 @@ Status: active
             self.assertTrue(MODULE.install_shortcut_command("/root/服务器使用人数查询", str(shortcut)))
             self.assertFalse(MODULE.install_shortcut_command("/root/服务器使用人数查询", str(shortcut)))
 
+    def test_self_update_reports_latest_when_download_matches_current_script(self):
+        class FakeResponse:
+            def __init__(self, data):
+                self.data = data
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return self.data
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script = Path(temp_dir) / "服务器使用人数查询"
+            script.write_bytes(b"#!/usr/bin/env python3\nprint('same')\n")
+            output = io.StringIO()
+
+            with mock.patch.object(MODULE.sys, "argv", [str(script)]), \
+                mock.patch.object(MODULE.urllib.request, "urlopen", return_value=FakeResponse(script.read_bytes())), \
+                mock.patch.object(MODULE.os, "execv") as execv, \
+                redirect_stdout(output):
+                result = MODULE.self_update()
+
+            self.assertEqual(result, 0)
+            self.assertEqual(output.getvalue().strip(), "当前已是最新版本")
+            execv.assert_not_called()
+            self.assertFalse(Path(str(script) + ".new").exists())
+
     def test_source_key_ignores_ip_and_uses_location_and_isp(self):
         self.assertEqual(MODULE.build_source_key("河北石家庄", "电信"), "河北石家庄|电信")
 
