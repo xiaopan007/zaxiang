@@ -1146,6 +1146,17 @@ def clear_screen_on_exit():
         print()
 
 
+def print_screen_title(title):
+    print(title)
+    print()
+    try:
+        sys.stdout.flush()
+    except OSError:
+        pass
+    if sys.stdout.isatty():
+        time.sleep(0.1)
+
+
 def show_menu(port):
     while True:
         print()
@@ -1197,12 +1208,14 @@ def wait_return():
 
 
 def query_ip_details(port):
+    print_screen_title("查询 IP 连接情况")
     print_summary(port)
     wait_return()
 
 
 def block_by_ip(port):
     while True:
+        print_screen_title("按 IP 封禁")
         details = get_visible_ip_details(port)
         if not details:
             print("当前没有可封禁的公网 IP")
@@ -1231,6 +1244,7 @@ def block_by_ip(port):
 
 def unblock_by_ip(port):
     while True:
+        print_screen_title("解除 IP 封禁")
         blocked_entries = get_blocked_ip_entries(port)
         if not blocked_entries:
             print("当前没有这个 Snell 端口的封禁 IP")
@@ -1274,9 +1288,7 @@ def parse_scan_interval(value):
 
 def new_source_notify_menu(port):
     while True:
-        print()
-        print("新来源自动通知")
-        print()
+        print_screen_title("新来源自动通知")
         print("当前状态：" + ("已开启" if is_monitor_enabled() else "已关闭"))
         print()
         print("1. 开启自动扫描")

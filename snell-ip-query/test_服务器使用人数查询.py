@@ -77,6 +77,17 @@ class SnellUsageQueryTests(unittest.TestCase):
             ],
         )
 
+    def test_query_ip_details_prints_screen_title_before_details(self):
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "print_summary") as print_summary, \
+            mock.patch.object(MODULE, "wait_return"), \
+            redirect_stdout(output):
+            MODULE.query_ip_details("49376")
+
+        print_summary.assert_called_once_with("49376")
+        self.assertTrue(output.getvalue().startswith("查询 IP 连接情况\n\n"))
+
     def test_filter_blocked_ip_details_hides_already_blocked_users(self):
         details = {
             "1.2.3.4": {"location": "河北石家庄", "isp": "电信", "connections": 31},
