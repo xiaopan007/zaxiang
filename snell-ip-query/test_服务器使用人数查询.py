@@ -468,6 +468,28 @@ Status: active
         self.assertEqual(result, 0)
         clear.assert_called_once()
 
+    def test_wait_return_pauses_before_return_prompt_for_screen_reader(self):
+        with mock.patch.object(MODULE.sys.stdout, "isatty", return_value=True), \
+            mock.patch.object(MODULE.sys.stdout, "flush") as flush, \
+            mock.patch.object(MODULE.time, "sleep") as sleep, \
+            mock.patch("builtins.input", return_value="0"):
+            MODULE.wait_return()
+
+        flush.assert_called()
+        sleep.assert_called_once_with(0.5)
+
+    def test_read_prompt_pauses_before_input_for_screen_reader(self):
+        with mock.patch.object(MODULE.sys.stdout, "isatty", return_value=True), \
+            mock.patch.object(MODULE.sys.stdout, "flush") as flush, \
+            mock.patch.object(MODULE.time, "sleep") as sleep, \
+            mock.patch("builtins.input", return_value="1") as input_mock:
+            value = MODULE.read_prompt("请选择：")
+
+        self.assertEqual(value, "1")
+        flush.assert_called()
+        sleep.assert_called_once_with(0.5)
+        input_mock.assert_called_once_with("请选择：")
+
     def test_main_menu_returns_immediately_after_latest_update_check(self):
         output = io.StringIO()
 

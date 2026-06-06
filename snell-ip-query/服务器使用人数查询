@@ -1157,6 +1157,20 @@ def print_screen_title(title):
         time.sleep(0.1)
 
 
+def pause_before_prompt():
+    try:
+        sys.stdout.flush()
+    except OSError:
+        pass
+    if sys.stdout.isatty():
+        time.sleep(0.5)
+
+
+def read_prompt(prompt):
+    pause_before_prompt()
+    return input(prompt)
+
+
 def show_menu(port):
     while True:
         print()
@@ -1166,7 +1180,7 @@ def show_menu(port):
         print("4. 新来源自动通知")
         print("0. 退出脚本")
         print("00. 更新脚本")
-        choice = input("请选择：").strip().lower()
+        choice = read_prompt("请选择：").strip().lower()
 
         if choice == "00":
             update_result = self_update()
@@ -1201,7 +1215,7 @@ def show_menu(port):
 
 def wait_return():
     while True:
-        selected = input("0 返回上一级菜单：").strip()
+        selected = read_prompt("0 返回上一级菜单：").strip()
         if selected == "0":
             return
         print("无效选项")
@@ -1226,7 +1240,7 @@ def block_by_ip(port):
         for line in format_block_menu_lines(details):
             print(line)
 
-        selected = input("输入要封禁的序号，0 返回上一级菜单：").strip()
+        selected = read_prompt("输入要封禁的序号，0 返回上一级菜单：").strip()
         if selected == "0":
             return
         if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
@@ -1258,7 +1272,7 @@ def unblock_by_ip(port):
             protocols = "/".join(blocked_entries[ip].get("protocols", []))
             print(f"{index}. {label} {ip} 已封禁协议：{protocols}")
 
-        selected = input("输入要解除封禁的序号，0 返回上一级菜单：").strip()
+        selected = read_prompt("输入要解除封禁的序号，0 返回上一级菜单：").strip()
         if selected == "0":
             return
         if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
@@ -1294,7 +1308,7 @@ def new_source_notify_menu(port):
         print("1. 开启自动扫描")
         print("2. 关闭自动扫描")
         print("0. 返回")
-        choice = input("请选择：").strip().lower()
+        choice = read_prompt("请选择：").strip().lower()
 
         if choice == "0":
             return
