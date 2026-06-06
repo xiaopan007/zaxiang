@@ -918,6 +918,9 @@ def is_monitor_enabled():
 
 
 def enable_new_source_monitor(port, server_name, bot_token, chat_id, scan_interval):
+    server_name = server_name.strip()
+    bot_token = bot_token.strip()
+    chat_id = chat_id.strip()
     config = {
         "server_name": server_name,
         "telegram_bot_token": bot_token,
@@ -925,6 +928,10 @@ def enable_new_source_monitor(port, server_name, bot_token, chat_id, scan_interv
         "scan_interval": scan_interval,
     }
     save_monitor_config(MONITOR_CONFIG_PATH, config)
+
+    if not bot_token or not chat_id:
+        disable_monitor_timer()
+        return True, "未填写 Telegram 信息，已关闭通知。"
 
     state = load_monitor_state(MONITOR_STATE_PATH)
     state["initialized"] = False
@@ -1261,7 +1268,7 @@ def new_source_notify_menu(port):
             bot_token = input("请输入 Telegram Bot Token：").strip()
             chat_id = input("请输入 Telegram Chat ID：").strip()
             interval = parse_scan_interval(input("请输入扫描间隔秒数，默认 60："))
-            if not server_name or not bot_token or not chat_id or interval is None:
+            if not server_name or interval is None:
                 print("输入无效")
                 wait_return()
                 refresh_screen()

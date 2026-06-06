@@ -284,6 +284,29 @@ Status: active
             self.assertEqual(message, "已发送新来源通知")
             send.assert_called_once_with("token", "chat", "香港中转1 有新的 河北石家庄联通 加入")
 
+    def test_enable_new_source_monitor_blank_telegram_clears_config_and_disables_notification(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            state_path = Path(temp_dir) / "state.json"
+
+            with mock.patch.object(MODULE, "MONITOR_CONFIG_PATH", str(config_path)), \
+                mock.patch.object(MODULE, "MONITOR_STATE_PATH", str(state_path)), \
+                mock.patch.object(MODULE, "disable_monitor_timer", return_value=(True, "自动扫描已关闭。")) as disable, \
+                mock.patch.object(MODULE, "scan_new_source_notifications") as scan, \
+                mock.patch.object(MODULE, "install_monitor_timer") as install:
+                ok, message = MODULE.enable_new_source_monitor("49376", "家宽", "", "", 60)
+
+            self.assertTrue(ok)
+            self.assertEqual(message, "未填写 Telegram 信息，已关闭通知。")
+            disable.assert_called_once()
+            scan.assert_not_called()
+            install.assert_not_called()
+            config = MODULE.load_monitor_config(str(config_path))
+            self.assertEqual(config["server_name"], "家宽")
+            self.assertEqual(config["telegram_bot_token"], "")
+            self.assertEqual(config["telegram_chat_id"], "")
+            self.assertEqual(config["scan_interval"], 60)
+
     def test_new_source_menu_uses_fixed_options_and_collects_enable_inputs_separately(self):
         output = io.StringIO()
 
@@ -300,6 +323,19 @@ Status: active
         self.assertIn("1. 开启自动扫描", text)
         self.assertIn("2. 关闭自动扫描", text)
         self.assertIn("正在开启自动扫描...", text)
+
+    def test_new_source_menu_allows_blank_telegram_inputs_to_disable_notification(self):
+        output = io.StringIO()
+
+        with mock.patch.object(MODULE, "is_monitor_enabled", return_value=True), \
+            mock.patch.object(MODULE, "enable_new_source_monitor", return_value=(True, "未填写 Telegram 信息，已关闭通知。")) as enable, \
+            mock.patch.object(MODULE, "refresh_screen"), \
+            mock.patch("builtins.input", side_effect=["1", "家宽", "", "", "", "0", "0"]), \
+            redirect_stdout(output):
+            MODULE.new_source_notify_menu("49376")
+
+        enable.assert_called_once_with("49376", "家宽", "", "", 60)
+        self.assertIn("未填写 Telegram 信息，已关闭通知。", output.getvalue())
 
     def test_refresh_screen_uses_clear_when_terminal_supports_it(self):
         class FakeTTY(io.StringIO):

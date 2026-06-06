@@ -50,7 +50,9 @@ c
 0. 返回
 ```
 
-开启时会逐项输入服务器名称、Telegram Bot Token、Telegram Chat ID 和扫描间隔。第一次开启会静默记录当前已有的“地区+运营商”来源，之后发现新的“地区+运营商”组合才发送 Telegram 通知。
+开启时会逐项输入服务器名称、Telegram Bot Token、Telegram Chat ID 和扫描间隔。Telegram Bot Token 或 Telegram Chat ID 直接回车留空时，会清空已保存的 Telegram 配置并关闭通知。
+
+第一次开启通知会静默记录当前已有的“地区+运营商”来源，之后发现新的“地区+运营商”组合才发送 Telegram 通知。
 
 通知示例：
 
