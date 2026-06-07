@@ -205,26 +205,34 @@ set_timezone_shanghai() {
 # 2) 交换分区（swap）
 # -----------------------------
 setup_swap() {
-  # 说明：优先使用 fallocate；若不支持则回退 dd。仅当系统没有任何 swap 时创建。
-  local active_swaps
+  # 说明：保证系统至少有 2G swap。若现有 /swapfile 小于 2G，会重建为 2G。
+  local active_swaps swap_total_mb
   active_swaps=$(swapon --show --noheadings 2>/dev/null | awk '{print $1}' || true)
+  swap_total_mb=$(free -m | awk '/^Swap:/ {print $2}')
   local swapfile_active=false
 
-  if grep -qxF "/swapfile" <<<"$active_swaps"; then
-    echo "检测到 /swapfile 已启用，跳过创建。"
-    swapfile_active=true
-  elif [[ -n "$active_swaps" ]]; then
+  if [[ "${swap_total_mb:-0}" =~ ^[0-9]+$ ]] && (( swap_total_mb >= 2048 )); then
     echo "检测到已有 swap："
-    echo "$active_swaps"
-    echo "跳过创建新的 /swapfile。"
-  elif [[ -e /swapfile ]]; then
-    echo "/swapfile 文件存在但未启用，尝试启用..."
-    chmod 600 /swapfile
-    mkswap /swapfile
-    swapon /swapfile
-    swapfile_active=true
+    swapon --show || true
+    echo "当前 swap 已达到至少 2G，跳过创建。"
+    if grep -qxF "/swapfile" <<<"$active_swaps"; then
+      swapfile_active=true
+    fi
   else
-    echo "创建 2G 交换分区..."
+    if grep -qxF "/swapfile" <<<"$active_swaps"; then
+      echo "检测到 /swapfile 小于 2G，正在重建为 2G..."
+      swapoff /swapfile
+    elif [[ -n "$active_swaps" ]]; then
+      echo "检测到已有 swap 总量小于 2G："
+      swapon --show || true
+      echo "将额外创建 /swapfile 以保证 swap 至少 2G。"
+    elif [[ -e /swapfile ]]; then
+      echo "/swapfile 文件存在但未启用，正在重建为 2G..."
+    else
+      echo "创建 2G 交换分区..."
+    fi
+
+    rm -f /swapfile
     if ! fallocate -l 2G /swapfile 2>/dev/null; then
       dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
     fi
@@ -311,6 +319,108 @@ SYS
   else
     echo "警告：尝试启用后状态为 cc='$cur_cc' qdisc='$cur_qdisc'，可能是内核/宿主限制。"
   fi
+}
+
+format_bytes_gb() {
+  awk -v bytes="${1:-0}" 'BEGIN { printf "%.2fG", bytes / 1024 / 1024 / 1024 }'
+}
+
+network_totals() {
+  awk '
+    BEGIN { rx = 0; tx = 0 }
+    NR > 2 {
+      iface = $1
+      gsub(":", "", iface)
+      if (iface == "lo") next
+      rx += $2
+      tx += $10
+    }
+    END {
+      printf "%s %s\n", rx, tx
+    }
+  ' /proc/net/dev 2>/dev/null || echo "0 0"
+}
+
+system_info_query() {
+  refresh_screen
+  echo "正在查询系统信息..."
+
+  local cpu_info cpu_usage_percent cpu_cores cpu_freq mem_info disk_info
+  local ipinfo country city isp_info load dns_addresses cpu_arch hostname_text
+  local kernel_version congestion_algorithm queue_algorithm os_info current_time
+  local swap_info runtime timezone tcp_count udp_count ipv4_address ipv6_address
+  local rx_bytes tx_bytes rx tx
+
+  cpu_info=$(lscpu 2>/dev/null | awk -F': +' '/Model name:/ {print $2; exit}')
+  cpu_info="${cpu_info:-未知}"
+  cpu_usage_percent=$(awk '{u=$2+$4; t=$2+$4+$5; if (NR==1){u1=u; t1=t;} else printf "%.0f\n", (($2+$4-u1) * 100 / (t-t1))}' \
+    <(grep 'cpu ' /proc/stat) <(sleep 1; grep 'cpu ' /proc/stat) 2>/dev/null || echo "0")
+  cpu_cores=$(nproc 2>/dev/null || echo "未知")
+  cpu_freq=$(awk '/MHz/ {printf "%.1f GHz\n", $4/1000; exit}' /proc/cpuinfo 2>/dev/null || echo "未知")
+  mem_info=$(free -b | awk 'NR==2{printf "%.2f/%.2fM (%.2f%%)", $3/1024/1024, $2/1024/1024, $3*100/$2}' 2>/dev/null || echo "未知")
+  disk_info=$(df -h / | awk 'NR==2{printf "%s/%s (%s)", $3, $2, $5}' 2>/dev/null || echo "未知")
+
+  ipinfo=$(curl -fsS --max-time 3 ipinfo.io 2>/dev/null || true)
+  country=$(printf "%s" "$ipinfo" | awk -F': ' '/"country"/ {gsub(/[",]/, "", $2); print $2; exit}')
+  city=$(printf "%s" "$ipinfo" | awk -F': ' '/"city"/ {gsub(/[",]/, "", $2); print $2; exit}')
+  isp_info=$(printf "%s" "$ipinfo" | awk -F': ' '/"org"/ {gsub(/[",]/, "", $2); print $2; exit}')
+  country="${country:-未知}"
+  city="${city:-未知}"
+  isp_info="${isp_info:-未知}"
+  ipv4_address=$(curl -fsS --max-time 3 https://ipinfo.io/ip 2>/dev/null || true)
+  ipv6_address=$(curl -fsS --max-time 3 https://v6.ipinfo.io/ip 2>/dev/null || true)
+
+  load=$(uptime | awk '{print $(NF-2), $(NF-1), $NF}' 2>/dev/null || echo "未知")
+  dns_addresses=$(awk '/^nameserver/{printf "%s ", $2} END {print ""}' /etc/resolv.conf 2>/dev/null)
+  dns_addresses="${dns_addresses:-未知}"
+  cpu_arch=$(uname -m 2>/dev/null || echo "未知")
+  hostname_text=$(uname -n 2>/dev/null || echo "未知")
+  kernel_version=$(uname -r 2>/dev/null || echo "未知")
+  congestion_algorithm=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "未知")
+  queue_algorithm=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "未知")
+  os_info=$(grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d '=' -f2 | tr -d '"' || echo "未知")
+  current_time=$(date "+%Y-%m-%d %I:%M %p")
+  swap_info=$(free -m | awk 'NR==3{used=$3; total=$2; if (total == 0) {percentage=0} else {percentage=used*100/total}; printf "%dM/%dM (%d%%)", used, total, percentage}' 2>/dev/null || echo "未知")
+  runtime=$(awk -F. '{run_days=int($1 / 86400);run_hours=int(($1 % 86400) / 3600);run_minutes=int(($1 % 3600) / 60); if (run_days > 0) printf("%d天 ", run_days); if (run_hours > 0) printf("%d时 ", run_hours); printf("%d分\n", run_minutes)}' /proc/uptime 2>/dev/null || echo "未知")
+  timezone=$(timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null || echo "未知")
+  tcp_count=$(ss -t 2>/dev/null | wc -l | tr -d ' ')
+  udp_count=$(ss -u 2>/dev/null | wc -l | tr -d ' ')
+  read -r rx_bytes tx_bytes < <(network_totals)
+  rx=$(format_bytes_gb "$rx_bytes")
+  tx=$(format_bytes_gb "$tx_bytes")
+
+  refresh_screen
+  echo "系统信息查询"
+  echo "-------------"
+  echo "主机名:         $hostname_text"
+  echo "系统版本:       $os_info"
+  echo "Linux版本:      $kernel_version"
+  echo "-------------"
+  echo "CPU架构:        $cpu_arch"
+  echo "CPU型号:        $cpu_info"
+  echo "CPU核心数:      $cpu_cores"
+  echo "CPU频率:        $cpu_freq"
+  echo "-------------"
+  echo "CPU占用:        ${cpu_usage_percent}%"
+  echo "系统负载:       $load"
+  echo "TCP|UDP连接数:  ${tcp_count:-0}|${udp_count:-0}"
+  echo "物理内存:       $mem_info"
+  echo "虚拟内存:       $swap_info"
+  echo "硬盘占用:       $disk_info"
+  echo "-------------"
+  echo "总接收:         $rx"
+  echo "总发送:         $tx"
+  echo "-------------"
+  echo "网络算法:       $congestion_algorithm $queue_algorithm"
+  echo "-------------"
+  echo "运营商:         $isp_info"
+  [[ -n "$ipv4_address" ]] && echo "IPv4地址:       $ipv4_address"
+  [[ -n "$ipv6_address" ]] && echo "IPv6地址:       $ipv6_address"
+  echo "DNS地址:        $dns_addresses"
+  echo "地理位置:       $country $city"
+  echo "系统时间:       $timezone $current_time"
+  echo "-------------"
+  echo "运行时长:       $runtime"
 }
 
 detect_ssh_ports() {
@@ -1252,10 +1362,11 @@ main_menu() {
   install_shortcut_command
   while true; do
     echo
-    echo "1. 优化 VPS"
-    echo "2. 防火墙管理"
-    echo "3. TG-bot通知管理"
-    echo "4. 测试脚本合集"
+    echo "1. 系统信息查询"
+    echo "2. 优化 VPS"
+    echo "3. 防火墙管理"
+    echo "4. TG-bot通知管理"
+    echo "5. 测试脚本合集"
     echo "0. 退出脚本"
     echo "00. 更新脚本"
     local choice
@@ -1263,7 +1374,8 @@ main_menu() {
 
     case "$choice" in
       00) self_update ;;
-      1)
+      1) refresh_screen; system_info_query; finish_menu_action ;;
+      2)
         refresh_screen
         FINISH_ENABLED=true
         optimize_vps
@@ -1271,9 +1383,9 @@ main_menu() {
         echo "优化完成，返回主菜单。"
         finish_menu_action
       ;;
-      2) refresh_screen; firewall_menu ;;
-      3) refresh_screen; tg_notify_menu ;;
-      4) refresh_screen; test_scripts_menu ;;
+      3) refresh_screen; firewall_menu ;;
+      4) refresh_screen; tg_notify_menu ;;
+      5) refresh_screen; test_scripts_menu ;;
       0) refresh_screen; exit 0 ;;
       *) echo "无效选项。" ;;
     esac
