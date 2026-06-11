@@ -423,6 +423,13 @@ system_info_query() {
   echo "运行时长:       $runtime"
 }
 
+finish_system_info_action() {
+  echo
+  read -n 1 -s -r -p "按任意键返回主菜单..."
+  echo
+  refresh_screen
+}
+
 detect_ssh_ports() {
   local -a SSH_PORTS=()
   mapfile -t SSH_PORTS < <( (sshd -T 2>/dev/null | awk '/^port /{print $2}' | sort -n | uniq) || true )
@@ -1374,7 +1381,7 @@ main_menu() {
 
     case "$choice" in
       00) self_update ;;
-      1) refresh_screen; system_info_query; finish_menu_action ;;
+      1) refresh_screen; system_info_query; finish_system_info_action ;;
       2)
         refresh_screen
         FINISH_ENABLED=true
