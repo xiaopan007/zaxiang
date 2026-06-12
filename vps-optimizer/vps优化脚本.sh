@@ -1374,16 +1374,27 @@ firewall_menu() {
 change_server_password() {
   require_root
 
-  local username
-  read -r -p "请输入要更改密码的用户名，直接回车默认为 root：" username
-  username="${username:-root}"
+  local username new_password
+  username="${SUDO_USER:-$(logname 2>/dev/null || true)}"
+  username="${username:-$(whoami 2>/dev/null || echo root)}"
+  if [[ "$username" == "root" && -n "${USER:-}" && "$USER" != "root" ]]; then
+    username="$USER"
+  fi
 
   if ! id "$username" >/dev/null 2>&1; then
     echo "用户不存在：$username"
     return 1
   fi
 
-  if passwd "$username"; then
+  echo "当前登录用户：$username"
+  read -r -s -p "请输入新密码：" new_password
+  echo
+  if [[ -z "$new_password" ]]; then
+    echo "密码不能为空。"
+    return 1
+  fi
+
+  if printf "%s:%s\n" "$username" "$new_password" | chpasswd; then
     echo "服务器密码更改成功。"
   else
     echo "服务器密码更改失败。"
