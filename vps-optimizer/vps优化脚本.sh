@@ -1058,6 +1058,13 @@ finish_test_script_action() {
   refresh_screen
 }
 
+finish_system_menu_action() {
+  echo
+  read -n 1 -s -r -p "按任意键返回上一级菜单..."
+  echo
+  refresh_screen
+}
+
 test_choice_action() {
   refresh_screen
   run_test_script_action "$@"
@@ -1364,13 +1371,93 @@ firewall_menu() {
   done
 }
 
+change_server_password() {
+  require_root
+
+  local username
+  read -r -p "请输入要更改密码的用户名，直接回车默认为 root：" username
+  username="${username:-root}"
+
+  if ! id "$username" >/dev/null 2>&1; then
+    echo "用户不存在：$username"
+    return 1
+  fi
+
+  if passwd "$username"; then
+    echo "服务器密码更改成功。"
+  else
+    echo "服务器密码更改失败。"
+    return 1
+  fi
+}
+
+change_server_hostname() {
+  require_root
+
+  local new_hostname
+  while true; do
+    read -r -p "请输入新的服务器名称，0 返回上一级菜单：" new_hostname
+    if [[ "$new_hostname" == "0" ]]; then
+      return 0
+    fi
+    if [[ "$new_hostname" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,62}$ && "$new_hostname" != *..* && "$new_hostname" != *.-* && "$new_hostname" != *-. ]]; then
+      break
+    fi
+    echo "服务器名称无效，请使用字母、数字、点或短横线，且不能以点或短横线结尾。"
+  done
+
+  if command -v hostnamectl >/dev/null 2>&1; then
+    hostnamectl set-hostname "$new_hostname"
+  else
+    hostname "$new_hostname"
+    echo "$new_hostname" >/etc/hostname
+  fi
+
+  if grep -qE '^\s*127\.0\.1\.1\s+' /etc/hosts 2>/dev/null; then
+    sed -i "s/^\s*127\.0\.1\.1\s\+.*/127.0.1.1 $new_hostname/" /etc/hosts
+  elif ! grep -qE "^\s*127\.0\.1\.1\s+${new_hostname}(\s|$)" /etc/hosts 2>/dev/null; then
+    echo "127.0.1.1 $new_hostname" >>/etc/hosts
+  fi
+
+  echo "服务器名称更改成功：$new_hostname"
+}
+
+system_menu() {
+  while true; do
+    echo
+    echo "系统相关"
+    echo "1. 系统信息查询"
+    echo "2. 优化系统"
+    echo "3. 更改服务器密码"
+    echo "4. 更改服务器名称"
+    echo "0. 返回上一级菜单"
+    local choice
+    read -r -p "请选择：" choice
+
+    case "$choice" in
+      1) refresh_screen; system_info_query; finish_system_info_action ;;
+      2)
+        refresh_screen
+        FINISH_ENABLED=true
+        optimize_vps
+        FINISH_ENABLED=false
+        echo "优化完成，返回系统相关菜单。"
+        finish_menu_action
+      ;;
+      3) refresh_screen; change_server_password; finish_system_menu_action ;;
+      4) refresh_screen; change_server_hostname; finish_system_menu_action ;;
+      0) return 0 ;;
+      *) echo "无效选项。" ;;
+    esac
+  done
+}
+
 main_menu() {
   require_root
   install_shortcut_command
   while true; do
     echo
-    echo "1. 系统信息查询"
-    echo "2. 优化 VPS"
+    echo "1. 系统相关"
     echo "3. 防火墙管理"
     echo "4. TG-bot通知管理"
     echo "5. 测试脚本合集"
@@ -1381,15 +1468,7 @@ main_menu() {
 
     case "$choice" in
       00) self_update ;;
-      1) refresh_screen; system_info_query; finish_system_info_action ;;
-      2)
-        refresh_screen
-        FINISH_ENABLED=true
-        optimize_vps
-        FINISH_ENABLED=false
-        echo "优化完成，返回主菜单。"
-        finish_menu_action
-      ;;
+      1) refresh_screen; system_menu ;;
       3) refresh_screen; firewall_menu ;;
       4) refresh_screen; tg_notify_menu ;;
       5) refresh_screen; test_scripts_menu ;;
