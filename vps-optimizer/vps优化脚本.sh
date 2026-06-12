@@ -1433,6 +1433,167 @@ change_server_hostname() {
   echo "服务器名称更改成功：$new_hostname"
 }
 
+current_login_user() {
+  local username
+  username="${SUDO_USER:-$(logname 2>/dev/null || true)}"
+  username="${username:-$(whoami 2>/dev/null || echo root)}"
+  if [[ "$username" == "root" && -n "${USER:-}" && "$USER" != "root" ]]; then
+    username="$USER"
+  fi
+  printf "%s" "$username"
+}
+
+validate_sshd_config() {
+  if command -v sshd >/dev/null 2>&1; then
+    sshd -t
+  elif [[ -x /usr/sbin/sshd ]]; then
+    /usr/sbin/sshd -t
+  else
+    echo "未找到 sshd，无法校验 SSH 配置。"
+    return 1
+  fi
+}
+
+ensure_sshd_config_dir_included() {
+  local main_config="/etc/ssh/sshd_config"
+  [[ -f "$main_config" ]] || return 0
+
+  if ! grep -Eq '^[[:space:]]*Include[[:space:]]+/etc/ssh/sshd_config\.d/\*\.conf' "$main_config"; then
+    local backup_path="${main_config}.backup.$(date +%Y%m%d%H%M%S)"
+    cp "$main_config" "$backup_path"
+    sed -i '1iInclude /etc/ssh/sshd_config.d/*.conf' "$main_config"
+    echo "已备份 SSH 主配置：$backup_path"
+  fi
+}
+
+reload_ssh_service() {
+  if systemctl list-unit-files ssh.service --no-legend 2>/dev/null | grep -q '^ssh\.service'; then
+    systemctl reload ssh 2>/dev/null || systemctl restart ssh
+  elif systemctl list-unit-files sshd.service --no-legend 2>/dev/null | grep -q '^sshd\.service'; then
+    systemctl reload sshd 2>/dev/null || systemctl restart sshd
+  else
+    service ssh reload 2>/dev/null || service ssh restart 2>/dev/null || service sshd reload 2>/dev/null || service sshd restart
+  fi
+}
+
+allow_ssh_port_before_reload() {
+  local port="$1"
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q 'Status: active'; then
+    ufw allow "${port}/tcp"
+    echo "已在 UFW 放行 SSH 新端口：$port/tcp"
+  fi
+}
+
+change_ssh_port() {
+  require_root
+
+  local current_ports new_port config_file
+  current_ports="$(detect_ssh_ports | paste -sd ',' -)"
+  echo "当前检测到的 SSH 端口：${current_ports:-22}"
+
+  while true; do
+    read -r -p "请输入新的 SSH 登录端口，0 返回上一级菜单：" new_port
+    if [[ "$new_port" == "0" ]]; then
+      return 0
+    fi
+    if validate_port "$new_port"; then
+      break
+    fi
+    echo "端口号无效，必须是 1-65535。"
+  done
+
+  mkdir -p /etc/ssh/sshd_config.d
+  ensure_sshd_config_dir_included
+  config_file="/etc/ssh/sshd_config.d/99-vps-optimizer-port.conf"
+  cat >"$config_file" <<EOF
+Port $new_port
+EOF
+
+  if ! validate_sshd_config; then
+    rm -f "$config_file"
+    echo "SSH 配置校验失败，已撤销端口修改。"
+    return 1
+  fi
+
+  allow_ssh_port_before_reload "$new_port"
+  reload_ssh_service
+  echo "SSH 登录端口已更改为：$new_port"
+  echo "当前连接不会被主动断开。请先新开一个 SSH 窗口测试新端口，再考虑关闭旧端口。"
+}
+
+clear_current_user_authorized_keys() {
+  local username="$1"
+  local home_dir ssh_dir backup_path ts
+  home_dir="$(getent passwd "$username" | cut -d: -f6)"
+  [[ -n "$home_dir" && -d "$home_dir" ]] || return 0
+  ssh_dir="$home_dir/.ssh"
+  [[ -d "$ssh_dir" ]] || return 0
+
+  ts="$(date +%Y%m%d%H%M%S)"
+  for key_file in "$ssh_dir/authorized_keys" "$ssh_dir/authorized_keys2"; do
+    if [[ -s "$key_file" ]]; then
+      backup_path="${key_file}.backup.${ts}"
+      cp "$key_file" "$backup_path"
+      : >"$key_file"
+      chmod 600 "$key_file" "$backup_path"
+      chown "$username" "$key_file" "$backup_path" 2>/dev/null || true
+      echo "已备份并清空：$key_file -> $backup_path"
+    elif [[ -e "$key_file" ]]; then
+      : >"$key_file"
+      chmod 600 "$key_file"
+      chown "$username" "$key_file" 2>/dev/null || true
+      echo "已清空空密钥文件：$key_file"
+    fi
+  done
+}
+
+switch_to_ssh_password_login() {
+  require_root
+
+  local username new_password config_file
+  username="$(current_login_user)"
+  if ! id "$username" >/dev/null 2>&1; then
+    echo "用户不存在：$username"
+    return 1
+  fi
+
+  echo "当前登录用户：$username"
+  read -r -s -p "请输入用于 SSH 密码登录的新密码：" new_password
+  echo
+  if [[ -z "$new_password" ]]; then
+    echo "密码不能为空。"
+    return 1
+  fi
+
+  if ! printf "%s:%s\n" "$username" "$new_password" | chpasswd; then
+    echo "密码设置失败，未修改 SSH 登录方式。"
+    return 1
+  fi
+
+  mkdir -p /etc/ssh/sshd_config.d
+  ensure_sshd_config_dir_included
+  config_file="/etc/ssh/sshd_config.d/99-vps-optimizer-password-login.conf"
+  cat >"$config_file" <<'EOF'
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+ChallengeResponseAuthentication yes
+UsePAM yes
+PubkeyAuthentication no
+PermitRootLogin yes
+EOF
+
+  if ! validate_sshd_config; then
+    rm -f "$config_file"
+    echo "SSH 配置校验失败，已撤销登录方式修改。"
+    return 1
+  fi
+
+  reload_ssh_service
+  clear_current_user_authorized_keys "$username"
+  echo "已切换为 SSH 密码登录，并已清理当前用户残留登录密钥。"
+  echo "请先新开一个 SSH 窗口用密码登录验证，确认成功后再关闭当前连接。"
+}
+
 system_menu() {
   while true; do
     echo
@@ -1441,6 +1602,8 @@ system_menu() {
     echo "2. 优化系统"
     echo "3. 更改服务器密码"
     echo "4. 更改服务器名称"
+    echo "5. 修改 SSH 登录端口"
+    echo "6. 切换为 SSH 密码登录"
     echo "0. 返回上一级菜单"
     local choice
     read -r -p "请选择：" choice
@@ -1457,6 +1620,8 @@ system_menu() {
       ;;
       3) refresh_screen; change_server_password; finish_system_menu_action ;;
       4) refresh_screen; change_server_hostname; finish_system_menu_action ;;
+      5) refresh_screen; change_ssh_port; finish_system_menu_action ;;
+      6) refresh_screen; switch_to_ssh_password_login; finish_system_menu_action ;;
       0) return 0 ;;
       *) echo "无效选项。" ;;
     esac
