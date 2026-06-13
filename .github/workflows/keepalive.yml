@@ -1,0 +1,34 @@
+name: Keep Scheduled Workflows Alive
+
+on:
+  schedule:
+    - cron: "45 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Refresh repository activity when needed
+        run: |
+          last_commit_ts=$(git log -1 --format=%ct)
+          now_ts=$(date +%s)
+          age_days=$(( (now_ts - last_commit_ts) / 86400 ))
+
+          if [ "$age_days" -lt 45 ]; then
+            echo "Last commit is ${age_days} days old; no keepalive commit needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "Keep scheduled workflows alive"
+          git push
