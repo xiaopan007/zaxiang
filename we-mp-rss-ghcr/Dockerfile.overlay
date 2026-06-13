@@ -1,0 +1,4 @@
+ARG BASE_IMAGE=ghcr.io/rachelos/we-mp-rss:latest
+FROM ${BASE_IMAGE}
+
+COPY driver/wx.py /app/driver/wx.py
