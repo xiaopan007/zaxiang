@@ -94,13 +94,21 @@ def update_env_content(content, env_key, env_comment, cookie_value):
 
 def choose_service():
     print("请选择要获取登录凭证的网站：")
+    print("0. 退出")
     for key in sorted(SERVICES):
         print(f"{key}. {SERVICES[key]['name']}")
 
     choice = input("请输入序号后回车：").strip()
+    if choice == "0":
+        clear_screen()
+        sys.exit(0)
     if choice not in SERVICES:
-        raise RuntimeError("选择无效，请输入 " + "、".join(sorted(SERVICES)) + "。")
+        raise RuntimeError("选择无效，请输入 0、" + "、".join(sorted(SERVICES)) + "。")
     return SERVICES[choice]
+
+
+def clear_screen():
+    os.system("cls" if platform.system() == "Windows" else "clear")
 
 
 def find_browser():
