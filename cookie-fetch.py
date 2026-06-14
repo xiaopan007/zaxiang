@@ -128,10 +128,14 @@ def update_script():
         content = response.read()
     if not content.startswith(b"#!/usr/bin/env python3"):
         raise RuntimeError("更新失败：下载到的内容不是脚本。")
+    if script_path.read_bytes() == content:
+        print("已是最新版本。")
+        input("按回车退出。")
+        return
     script_path.write_bytes(content)
     os.chmod(script_path, script_path.stat().st_mode | 0o700)
-    print(f"已更新脚本：{script_path}")
-    input("更新完成，请重新运行脚本。按回车退出。")
+    print(f"更新成功：{script_path}")
+    input("请重新运行脚本。按回车退出。")
 
 
 def clear_screen():
