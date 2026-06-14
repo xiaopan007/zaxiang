@@ -16,7 +16,8 @@ import urllib.request
 from pathlib import Path
 
 
-SCRIPT_API_URL = "https://api.github.com/repos/xiaopan007/zaxiang/contents/cookie-fetch.py?ref=main"
+SCRIPT_COMMIT_API_URL = "https://api.github.com/repos/xiaopan007/zaxiang/commits/main"
+SCRIPT_RAW_URL_TEMPLATE = "https://raw.githubusercontent.com/xiaopan007/zaxiang/{sha}/cookie-fetch.py"
 
 
 SERVICES = {
@@ -117,12 +118,14 @@ def choose_service():
 def update_script():
     script_path = Path(__file__).resolve()
     request = urllib.request.Request(
-        SCRIPT_API_URL,
+        SCRIPT_COMMIT_API_URL,
         headers={"User-Agent": "cookie-fetch-updater"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         data = json.loads(response.read().decode("utf-8"))
-    content = base64.b64decode(data["content"])
+    update_url = SCRIPT_RAW_URL_TEMPLATE.format(sha=data["sha"])
+    with urllib.request.urlopen(update_url, timeout=30) as response:
+        content = response.read()
     if not content.startswith(b"#!/usr/bin/env python3"):
         raise RuntimeError("更新失败：下载到的内容不是脚本。")
     script_path.write_bytes(content)
