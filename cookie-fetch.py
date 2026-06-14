@@ -94,9 +94,9 @@ def update_env_content(content, env_key, env_comment, cookie_value):
 
 def choose_service():
     print("请选择要获取登录凭证的网站：")
-    print("0. 退出")
     for key in sorted(SERVICES):
         print(f"{key}. {SERVICES[key]['name']}")
+    print("0. 退出")
 
     choice = input("请输入序号后回车：").strip()
     if choice == "0":
@@ -108,7 +108,11 @@ def choose_service():
 
 
 def clear_screen():
-    os.system("cls" if platform.system() == "Windows" else "clear")
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.flush()
 
 
 def find_browser():
