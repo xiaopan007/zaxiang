@@ -142,7 +142,7 @@ def clear_screen():
     if platform.system() == "Windows":
         os.system("cls")
     else:
-        sys.stdout.write("\033[2J\033[H")
+        sys.stdout.write("\033[H\033[2J\033[3J")
         sys.stdout.flush()
 
 
