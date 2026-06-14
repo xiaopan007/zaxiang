@@ -16,6 +16,9 @@ import urllib.request
 from pathlib import Path
 
 
+SCRIPT_URL = "https://raw.githubusercontent.com/xiaopan007/zaxiang/main/cookie-fetch.py"
+
+
 SERVICES = {
     "1": {
         "name": "什么值得买",
@@ -97,14 +100,31 @@ def choose_service():
     for key in sorted(SERVICES):
         print(f"{key}. {SERVICES[key]['name']}")
     print("0. 退出")
+    print("00. 更新脚本")
 
-    choice = input("请输入序号后回车：").strip()
+    choice = input("请输入序号后回车（0 退出，00 更新脚本）：").strip()
     if choice == "0":
         clear_screen()
         sys.exit(0)
+    if choice == "00":
+        update_script()
+        sys.exit(0)
     if choice not in SERVICES:
-        raise RuntimeError("选择无效，请输入 0、" + "、".join(sorted(SERVICES)) + "。")
+        raise RuntimeError("选择无效，请输入 0、00、" + "、".join(sorted(SERVICES)) + "。")
     return SERVICES[choice]
+
+
+def update_script():
+    script_path = Path(__file__).resolve()
+    update_url = f"{SCRIPT_URL}?t={int(time.time())}"
+    with urllib.request.urlopen(update_url, timeout=30) as response:
+        content = response.read()
+    if not content.startswith(b"#!/usr/bin/env python3"):
+        raise RuntimeError("更新失败：下载到的内容不是脚本。")
+    script_path.write_bytes(content)
+    os.chmod(script_path, script_path.stat().st_mode | 0o700)
+    print(f"已更新脚本：{script_path}")
+    input("更新完成，请重新运行脚本。按回车退出。")
 
 
 def clear_screen():
