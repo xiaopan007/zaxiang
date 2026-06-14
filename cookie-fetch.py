@@ -109,7 +109,7 @@ def choose_service():
         sys.exit(0)
     if choice == "00":
         update_script()
-        sys.exit(0)
+        return None
     if choice not in SERVICES:
         raise RuntimeError("选择无效，请输入 0、00、" + "、".join(sorted(SERVICES)) + "。")
     return SERVICES[choice]
@@ -130,12 +130,12 @@ def update_script():
         raise RuntimeError("更新失败：下载到的内容不是脚本。")
     if script_path.read_bytes() == content:
         print("已是最新版本。")
-        input("按回车退出。")
+        input("按回车返回首页。")
         return
     script_path.write_bytes(content)
     os.chmod(script_path, script_path.stat().st_mode | 0o700)
     print(f"更新成功：{script_path}")
-    input("请重新运行脚本。按回车退出。")
+    input("请重新运行脚本以使用新版。按回车返回首页。")
 
 
 def clear_screen():
@@ -359,7 +359,10 @@ def launch_browser(browser_path, port, user_data_dir, login_url):
 
 
 def main():
-    service = choose_service()
+    while True:
+        service = choose_service()
+        if service is not None:
+            break
     browser_path = find_browser()
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="rsshub-cookie-browser-") as profile_dir:
