@@ -1,0 +1,1345 @@
+#!/usr/bin/env python3
+import ipaddress
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections import Counter
+from datetime import datetime, timedelta, timezone
+
+
+CONFIG_ENV = os.environ.get("SNELL_CONFIG")
+PORT_ENV = os.environ.get("SNELL_PORT")
+IP_API_TIMEOUT = int(os.environ.get("IP_API_TIMEOUT", "5"))
+
+COMMON_CONFIG_PATHS = (
+    "/etc/snell/config.conf",
+    "/etc/snell/snell-server.conf",
+    "/usr/local/etc/snell/config.conf",
+    "/usr/local/etc/snell-server.conf",
+    "/opt/snell/config.conf",
+)
+
+SHORTCUT_NAME = os.environ.get("SNELL_QUERY_SHORTCUT", "c")
+SHORTCUT_PATH = os.environ.get("SNELL_QUERY_SHORTCUT_PATH", "/usr/local/bin/c")
+SELF_UPDATE_URL = os.environ.get(
+    "SNELL_QUERY_UPDATE_URL",
+    "https://api.github.com/repos/xiaopan007/zaxiang/contents/snell-ip-query/%E6%9C%8D%E5%8A%A1%E5%99%A8%E4%BD%BF%E7%94%A8%E4%BA%BA%E6%95%B0%E6%9F%A5%E8%AF%A2?ref=main",
+)
+MONITOR_DIR = os.environ.get("SNELL_QUERY_MONITOR_DIR", "/root/.snell-ip-query")
+MONITOR_CONFIG_PATH = os.environ.get("SNELL_QUERY_MONITOR_CONFIG", os.path.join(MONITOR_DIR, "config.json"))
+MONITOR_STATE_PATH = os.environ.get("SNELL_QUERY_MONITOR_STATE", os.path.join(MONITOR_DIR, "state.json"))
+MONITOR_SERVICE_NAME = os.environ.get("SNELL_QUERY_MONITOR_SERVICE", "snell-new-source-notify")
+UPDATE_RESTARTED = 0
+UPDATE_FAILED = 1
+UPDATE_ALREADY_LATEST = 2
+
+
+def run_command(args):
+    try:
+        return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+
+
+def shell_quote(value):
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def build_alias_line(script_path, shortcut_name):
+    return "alias " + shortcut_name + "=" + shell_quote(script_path)
+
+
+def get_profile_paths():
+    home = os.path.expanduser("~")
+    shell_name = os.path.basename(os.environ.get("SHELL", ""))
+    paths = []
+
+    if shell_name == "zsh":
+        paths.append(os.path.join(home, ".zshrc"))
+    else:
+        paths.append(os.path.join(home, ".bashrc"))
+
+    paths.append(os.path.join(home, ".profile"))
+
+    seen = set()
+    result = []
+    for path in paths:
+        if path not in seen:
+            seen.add(path)
+            result.append(path)
+
+    return result
+
+
+def append_alias_once(profile_path, script_path, shortcut_name):
+    alias_line = build_alias_line(script_path, shortcut_name)
+    marker = "# snell-ip-query shortcut"
+
+    try:
+        existing = ""
+        if os.path.exists(profile_path):
+            with open(profile_path, "r", encoding="utf-8", errors="replace") as f:
+                existing = f.read()
+        if alias_line in existing or ("alias " + shortcut_name + "=") in existing:
+            return False
+
+        with open(profile_path, "a", encoding="utf-8") as f:
+            if existing and not existing.endswith("\n"):
+                f.write("\n")
+            f.write("\n" + marker + "\n" + alias_line + "\n")
+        return True
+    except OSError:
+        return False
+
+
+def build_shortcut_wrapper(script_path):
+    return "#!/bin/sh\nexec " + shell_quote(script_path) + ' "$@"\n'
+
+
+def install_shortcut_command(script_path, shortcut_path):
+    try:
+        wrapper = build_shortcut_wrapper(script_path)
+        existing = ""
+        if os.path.exists(shortcut_path):
+            with open(shortcut_path, "r", encoding="utf-8", errors="replace") as f:
+                existing = f.read()
+            if "服务器使用人数查询" not in existing and script_path not in existing:
+                return False
+            if existing == wrapper and os.access(shortcut_path, os.X_OK):
+                return False
+
+        with open(shortcut_path, "w", encoding="utf-8") as f:
+            f.write(wrapper)
+        os.chmod(shortcut_path, 0o755)
+        return True
+    except OSError:
+        return False
+
+
+def ensure_shortcut_installed():
+    script_path = os.path.abspath(sys.argv[0])
+
+    for profile_path in get_profile_paths():
+        append_alias_once(profile_path, script_path, SHORTCUT_NAME)
+
+    install_shortcut_command(script_path, SHORTCUT_PATH)
+
+
+def self_update():
+    script_path = os.path.abspath(sys.argv[0])
+    temp_path = script_path + ".new"
+    update_url = SELF_UPDATE_URL + ("&" if "?" in SELF_UPDATE_URL else "?") + "t=" + str(int(time.time()))
+    request = urllib.request.Request(
+        update_url,
+        headers={
+            "User-Agent": "snell-usage-counter-updater/1.0",
+            "Accept": "application/vnd.github.raw",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            data = response.read()
+        try:
+            with open(script_path, "rb") as f:
+                current_data = f.read()
+        except OSError:
+            current_data = None
+        if current_data == data:
+            print("当前已是最新版本")
+            return UPDATE_ALREADY_LATEST
+        with open(temp_path, "wb") as f:
+            f.write(data)
+        os.chmod(temp_path, 0o755)
+        os.replace(temp_path, script_path)
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+        print("更新失败：" + str(exc))
+        return UPDATE_FAILED
+
+    print("更新完成，正在重新启动脚本...")
+    time.sleep(1)
+    os.environ["SNELL_QUERY_CLEAR_ON_START"] = "1"
+    refresh_screen()
+    os.execv(script_path, [script_path])
+    return UPDATE_RESTARTED
+
+
+def strip_inline_comment(line):
+    for marker in ("#", ";"):
+        if marker in line:
+            line = line.split(marker, 1)[0]
+    return line.strip()
+
+
+def extract_port(value):
+    value = strip_inline_comment(value).strip().strip("'\"")
+    if value.isdigit():
+        return value
+
+    bracket_match = re.search(r"\]:(\d+)$", value)
+    if bracket_match:
+        return bracket_match.group(1)
+
+    last_part = value.rsplit(":", 1)[-1].strip()
+    if last_part.isdigit():
+        return last_part
+
+    port_match = re.search(r"\b(\d{2,5})\b$", value)
+    if port_match:
+        return port_match.group(1)
+
+    return None
+
+
+def parse_config_port(path):
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            for raw_line in f:
+                line = strip_inline_comment(raw_line)
+                if not line or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip().lower()
+                if key in ("listen", "port"):
+                    port = extract_port(value)
+                    if port:
+                        return port
+    except OSError:
+        return None
+
+    return None
+
+
+def get_snell_config_paths_from_process():
+    output = run_command(["ps", "-eo", "args"])
+    paths = []
+
+    for line in output.splitlines():
+        if "snell" not in line.lower():
+            continue
+        parts = line.split()
+        for index, part in enumerate(parts):
+            if part in ("-c", "--config") and index + 1 < len(parts):
+                paths.append(parts[index + 1])
+            elif part.startswith("-c") and len(part) > 2:
+                paths.append(part[2:])
+            elif part.startswith("--config="):
+                paths.append(part.split("=", 1)[1])
+
+    return paths
+
+
+def get_port_from_listeners():
+    if shutil.which("ss"):
+        output = run_command(["ss", "-Htlunp"])
+        for line in output.splitlines():
+            if "snell" not in line.lower():
+                continue
+            parts = line.split()
+            if len(parts) >= 5:
+                port = extract_port(parts[4])
+                if port:
+                    return port
+
+    if shutil.which("netstat"):
+        output = run_command(["netstat", "-tulnp"])
+        for line in output.splitlines():
+            if "snell" not in line.lower():
+                continue
+            parts = line.split()
+            if len(parts) >= 4:
+                port = extract_port(parts[3])
+                if port:
+                    return port
+
+    return None
+
+
+def get_snell_port():
+    if PORT_ENV and PORT_ENV.strip().isdigit():
+        return PORT_ENV.strip()
+
+    candidate_paths = []
+    if CONFIG_ENV:
+        candidate_paths.append(CONFIG_ENV)
+    candidate_paths.extend(get_snell_config_paths_from_process())
+    candidate_paths.extend(COMMON_CONFIG_PATHS)
+
+    seen = set()
+    for path in candidate_paths:
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        port = parse_config_port(path)
+        if port:
+            return port
+
+    return get_port_from_listeners()
+
+
+def normalize_endpoint(endpoint):
+    endpoint = endpoint.strip()
+    if not endpoint:
+        return ""
+
+    ipv6_bracket = re.match(r"^\[?([0-9a-fA-F:]+)\]:(\d+)$", endpoint)
+    if ipv6_bracket and ":" in ipv6_bracket.group(1):
+        value = ipv6_bracket.group(1)
+    else:
+        value = re.sub(r":\d+$", "", endpoint)
+
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+    if value.startswith("::ffff:"):
+        value = value[len("::ffff:") :]
+
+    return value
+
+
+def endpoint_has_port(endpoint, port):
+    endpoint = endpoint.strip()
+    return endpoint.endswith(":" + str(port)) or endpoint.endswith("]:" + str(port))
+
+
+def is_public_ip(value):
+    try:
+        ip = ipaddress.ip_address(value)
+        return ip.is_global
+    except ValueError:
+        return False
+
+
+def parse_ss_tcp_ips(port):
+    return set(parse_ss_tcp_ip_counts(port))
+
+
+def parse_ss_tcp_ip_counts(port):
+    output = run_command(["ss", "-Htn", "state", "established", "sport", "=", ":" + str(port)])
+    counts = Counter()
+
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        local_endpoint = parts[2]
+        peer_endpoint = parts[3]
+        if not endpoint_has_port(local_endpoint, port):
+            continue
+        ip = normalize_endpoint(peer_endpoint)
+        if is_public_ip(ip):
+            counts[ip] += 1
+
+    return counts
+
+
+def parse_netstat_tcp_ips(port):
+    return set(parse_netstat_tcp_ip_counts(port))
+
+
+def parse_netstat_tcp_ip_counts(port):
+    output = run_command(["netstat", "-tn"])
+    counts = Counter()
+
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) < 6 or not parts[0].startswith("tcp"):
+            continue
+        local_endpoint = parts[3]
+        peer_endpoint = parts[4]
+        state = parts[5].upper()
+        if state != "ESTABLISHED" or not endpoint_has_port(local_endpoint, port):
+            continue
+        ip = normalize_endpoint(peer_endpoint)
+        if is_public_ip(ip):
+            counts[ip] += 1
+
+    return counts
+
+
+def get_tcp_source_ips(port):
+    return set(get_tcp_source_ip_counts(port))
+
+
+def get_tcp_source_ip_counts(port):
+    if shutil.which("ss"):
+        return parse_ss_tcp_ip_counts(port)
+    if shutil.which("netstat"):
+        return parse_netstat_tcp_ip_counts(port)
+    return Counter()
+
+
+def get_local_ipv4_addresses():
+    ips = set()
+
+    if shutil.which("ip"):
+        output = run_command(["ip", "-o", "-4", "addr", "show", "scope", "global"])
+        for match in re.finditer(r"\binet\s+(\d+\.\d+\.\d+\.\d+)/", output):
+            ips.add(match.group(1))
+
+    if not ips and shutil.which("hostname"):
+        output = run_command(["hostname", "-I"])
+        for item in output.split():
+            try:
+                ip = ipaddress.ip_address(item)
+            except ValueError:
+                continue
+            if ip.version == 4 and not ip.is_loopback:
+                ips.add(str(ip))
+
+    if not ips and shutil.which("ifconfig"):
+        output = run_command(["ifconfig"])
+        for match in re.finditer(r"\binet\s+(\d+\.\d+\.\d+\.\d+)\b", output):
+            value = match.group(1)
+            if not value.startswith("127."):
+                ips.add(value)
+
+    return ips
+
+
+def parse_first_conntrack_tuple(line):
+    values = {}
+    for item in line.split():
+        if "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        if key not in values:
+            values[key] = value
+    return values
+
+
+def get_udp_source_ips(port):
+    conntrack_path = None
+    for path in ("/proc/net/nf_conntrack", "/proc/net/ip_conntrack"):
+        if os.path.exists(path):
+            conntrack_path = path
+            break
+    if not conntrack_path:
+        return set()
+
+    local_ips = get_local_ipv4_addresses()
+    ips = set()
+
+    try:
+        with open(conntrack_path, "r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) < 5 or parts[2] != "udp":
+                    continue
+                values = parse_first_conntrack_tuple(line)
+                if values.get("dport") != str(port):
+                    continue
+                if local_ips and values.get("dst") not in local_ips:
+                    continue
+                src = values.get("src", "")
+                if is_public_ip(src):
+                    ips.add(src)
+    except OSError:
+        return set()
+
+    return ips
+
+
+def lookup_location_and_isp(ip):
+    url = (
+        "http://ip-api.com/json/"
+        + ip
+        + "?fields=status,country,regionName,city,isp,org,as"
+        + "&lang=zh-CN"
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": "snell-usage-counter/2.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=IP_API_TIMEOUT) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+        return ("地区未知", "运营商未知")
+
+    if data.get("status") != "success":
+        return ("地区未知", "运营商未知")
+
+    country = data.get("country") or ""
+    region = data.get("regionName") or ""
+    city = data.get("city") or ""
+    location = normalize_location(country, region, city)
+    if needs_china_location_fallback(country, region, city):
+        fallback_location = lookup_pconline_location(ip)
+        if fallback_location != "地区未知":
+            location = fallback_location
+    isp = normalize_isp(data.get("isp") or data.get("org") or data.get("as") or "")
+
+    return (location, isp)
+
+
+def lookup_pconline_location(ip):
+    url = "https://whois.pconline.com.cn/ipJson.jsp?json=true&ip=" + ip
+    request = urllib.request.Request(url, headers={"User-Agent": "snell-usage-counter/2.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=IP_API_TIMEOUT) as response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError):
+        return "地区未知"
+
+    for encoding in ("utf-8", "gbk"):
+        try:
+            text = raw.decode(encoding)
+            data = json.loads(text.strip())
+            return normalize_pconline_location(data)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+
+    return "地区未知"
+
+
+def get_active_ip_details(port):
+    tcp_counts = get_tcp_source_ip_counts(port)
+    udp_ips = get_udp_source_ips(port)
+    all_ips = set(tcp_counts) | udp_ips
+    details = {}
+
+    for ip in sorted(all_ips):
+        location, isp = lookup_location_and_isp(ip)
+        details[ip] = {
+            "location": location,
+            "isp": isp,
+            "connections": tcp_counts.get(ip, 0) or 1,
+        }
+
+    return details
+
+
+def get_visible_ip_details(port):
+    details = get_active_ip_details(port)
+    blocked_entries = get_blocked_ip_entries(port)
+    return filter_blocked_ip_details(details, blocked_entries)
+
+
+def filter_blocked_ip_details(details, blocked_entries):
+    blocked_ips = set(blocked_entries)
+    return {ip: detail for ip, detail in details.items() if ip not in blocked_ips}
+
+
+def ensure_parent_dir(path):
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
+def load_json_file(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError):
+        pass
+    return default.copy()
+
+
+def save_json_file(path, data):
+    ensure_parent_dir(path)
+    temp_path = path + ".tmp"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+        f.write("\n")
+    os.replace(temp_path, path)
+
+
+def load_monitor_config(path=MONITOR_CONFIG_PATH):
+    return load_json_file(
+        path,
+        {
+            "server_name": "",
+            "telegram_bot_token": "",
+            "telegram_chat_id": "",
+            "scan_interval": 60,
+        },
+    )
+
+
+def save_monitor_config(path, config):
+    save_json_file(path, config)
+
+
+def load_monitor_state(path=MONITOR_STATE_PATH):
+    state = load_json_file(path, {"initialized": False, "seen_sources": {}})
+    if not isinstance(state.get("seen_sources"), dict):
+        state["seen_sources"] = {}
+    state["initialized"] = bool(state.get("initialized"))
+    return state
+
+
+def save_monitor_state(path, state):
+    save_json_file(path, state)
+
+
+def now_shanghai_string():
+    shanghai_tz = timezone(timedelta(hours=8))
+    return datetime.now(shanghai_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def build_source_key(location, isp):
+    return (location or "地区未知") + "|" + (isp or "运营商未知")
+
+
+def source_label(location, isp):
+    return (location or "地区未知") + (isp or "运营商未知")
+
+
+def collect_sources_from_details(details, now_text):
+    sources = {}
+    for detail in details.values():
+        location = detail.get("location", "地区未知")
+        isp = detail.get("isp", "运营商未知")
+        key = build_source_key(location, isp)
+        sources[key] = {
+            "location": location,
+            "isp": isp,
+            "first_seen_at": now_text,
+            "last_seen_at": now_text,
+            "seen_count": 1,
+        }
+    return sources
+
+
+def build_new_source_message(server_name, new_sources):
+    labels = [source_label(item.get("location"), item.get("isp")) for item in new_sources]
+    if len(labels) == 1:
+        return server_name + " 有新的 " + labels[0] + " 加入"
+
+    return server_name + " 有新的来源加入：\n" + "\n".join(labels)
+
+
+def send_telegram_message(bot_token, chat_id, text):
+    url = "https://api.telegram.org/bot" + urllib.parse.quote(bot_token, safe=":") + "/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    request = urllib.request.Request(url, data=data, headers={"User-Agent": "snell-usage-counter/2.0"})
+
+    try:
+        with urllib.request.urlopen(request, timeout=IP_API_TIMEOUT) as response:
+            body = response.read().decode("utf-8")
+        result = json.loads(body)
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        return False, "Telegram 发送失败：" + str(exc)
+
+    if not result.get("ok"):
+        return False, "Telegram 发送失败"
+    return True, "已发送"
+
+
+def scan_new_source_notifications(port, config_path=MONITOR_CONFIG_PATH, state_path=MONITOR_STATE_PATH):
+    config = load_monitor_config(config_path)
+    server_name = (config.get("server_name") or "").strip()
+    bot_token = (config.get("telegram_bot_token") or "").strip()
+    chat_id = (config.get("telegram_chat_id") or "").strip()
+    if not server_name or not bot_token or not chat_id:
+        return False, "自动扫描配置不完整"
+
+    now_text = now_shanghai_string()
+    current_sources = collect_sources_from_details(get_active_ip_details(port), now_text)
+    state = load_monitor_state(state_path)
+    seen_sources = state["seen_sources"]
+
+    if not state.get("initialized"):
+        seen_sources.update(current_sources)
+        state["initialized"] = True
+        save_monitor_state(state_path, state)
+        return True, "已初始化当前来源"
+
+    new_sources = []
+    for key, source in current_sources.items():
+        if key not in seen_sources:
+            new_sources.append(source)
+            continue
+        seen_sources[key]["last_seen_at"] = now_text
+        seen_sources[key]["seen_count"] = int(seen_sources[key].get("seen_count", 0)) + 1
+
+    if not new_sources:
+        save_monitor_state(state_path, state)
+        return True, "没有新来源"
+
+    ok, message = send_telegram_message(bot_token, chat_id, build_new_source_message(server_name, new_sources))
+    if not ok:
+        save_monitor_state(state_path, state)
+        return False, message
+
+    for source in new_sources:
+        seen_sources[build_source_key(source.get("location"), source.get("isp"))] = source
+    save_monitor_state(state_path, state)
+    return True, "已发送新来源通知"
+
+
+def format_summary_line(location_and_isp, count):
+    location, isp = location_and_isp
+    return location + isp + "：" + str(count)
+
+
+def sorted_ip_details(details):
+    return sorted(
+        details.items(),
+        key=lambda item: (-int(item[1].get("connections", 0)), item[1].get("location", ""), item[1].get("isp", ""), item[0]),
+    )
+
+
+def format_block_menu_lines(details):
+    lines = []
+    for index, (ip, detail) in enumerate(sorted_ip_details(details), start=1):
+        label = detail.get("location", "地区未知") + detail.get("isp", "运营商未知")
+        connections = detail.get("connections", 0)
+        lines.append(f"{index}. {label} {ip} 当前连接数：{connections}")
+
+    return lines
+
+
+def format_query_detail_lines(details):
+    lines = []
+    for ip, detail in sorted_ip_details(details):
+        label = detail.get("location", "地区未知") + detail.get("isp", "运营商未知")
+        connections = detail.get("connections", 0)
+        lines.append(f"{label} {ip} 当前连接数：{connections}")
+
+    return lines
+
+
+def get_blocked_ip_label(ip, active_details):
+    detail = active_details.get(ip)
+    if detail:
+        return detail.get("location", "地区未知") + detail.get("isp", "运营商未知")
+
+    location, isp = lookup_location_and_isp(ip)
+    return location + isp
+
+
+def build_block_commands(ip, port, firewall_kind):
+    if firewall_kind == "ufw":
+        return [
+            ["ufw", "--force", "insert", "1", "deny", "from", ip, "to", "any", "port", str(port), "proto", "tcp"],
+            ["ufw", "--force", "insert", "1", "deny", "from", ip, "to", "any", "port", str(port), "proto", "udp"],
+        ]
+
+    return [
+        ["iptables", "-I", "INPUT", "1", "-s", ip, "-p", "tcp", "--dport", str(port), "-j", "DROP"],
+        ["iptables", "-I", "INPUT", "1", "-s", ip, "-p", "udp", "--dport", str(port), "-j", "DROP"],
+    ]
+
+
+def parse_ufw_denies(output, port):
+    blocked = {}
+    pattern = re.compile(r"^\[\s*(\d+)\]\s+(\S+)\s+DENY IN\s+(\S+)")
+
+    for line in output.splitlines():
+        match = pattern.search(line.strip())
+        if not match:
+            continue
+
+        rule_number = int(match.group(1))
+        target = match.group(2)
+        source = match.group(3)
+        target_parts = target.split("/", 1)
+        target_port = target_parts[0]
+        protocol = target_parts[1] if len(target_parts) == 2 else "tcp/udp"
+
+        if target_port != str(port) or not is_public_ip(source):
+            continue
+
+        entry = blocked.setdefault(source, {"rules": [], "protocols": []})
+        entry["rules"].append(rule_number)
+        if protocol not in entry["protocols"]:
+            entry["protocols"].append(protocol)
+
+    for entry in blocked.values():
+        entry["rules"].sort()
+        entry["protocols"].sort()
+
+    return blocked
+
+
+def build_unblock_commands(blocked_entry, firewall_kind):
+    if firewall_kind == "ufw":
+        return [["ufw", "--force", "delete", str(rule_number)] for rule_number in sorted(blocked_entry.get("rules", []), reverse=True)]
+
+    return []
+
+
+def detect_firewall():
+    if shutil.which("ufw") and "Status: active" in run_command(["ufw", "status"]):
+        return "ufw"
+    if shutil.which("iptables"):
+        return "iptables"
+    return None
+
+
+def run_block_commands(ip, port):
+    firewall = detect_firewall()
+    if not firewall:
+        return False, "未找到可用防火墙命令：ufw 或 iptables"
+
+    for command in build_block_commands(ip, port, firewall):
+        try:
+            subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False, "封禁命令执行失败：" + " ".join(command)
+
+    cleanup_existing_connections(ip, port)
+    return True, "已封禁：" + ip
+
+
+def build_conntrack_cleanup_commands(ip, port):
+    return [
+        ["conntrack", "-D", "-s", ip, "-p", "tcp", "--dport", str(port)],
+        ["conntrack", "-D", "-s", ip, "-p", "udp", "--dport", str(port)],
+    ]
+
+
+def cleanup_existing_connections(ip, port):
+    if not shutil.which("conntrack"):
+        return
+
+    for command in build_conntrack_cleanup_commands(ip, port):
+        subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def get_blocked_ip_entries(port):
+    firewall = detect_firewall()
+    if firewall == "ufw":
+        return parse_ufw_denies(run_command(["ufw", "status", "numbered"]), port)
+    return {}
+
+
+def run_unblock_commands(blocked_entry):
+    firewall = detect_firewall()
+    if not firewall:
+        return False, "未找到可用防火墙命令：ufw 或 iptables"
+    if firewall != "ufw":
+        return False, "当前只支持自动解除 UFW 封禁规则"
+
+    commands = build_unblock_commands(blocked_entry, firewall)
+    if not commands:
+        return False, "没有找到可删除的封禁规则"
+
+    for command in commands:
+        try:
+            subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False, "解除封禁命令执行失败：" + " ".join(command)
+
+    return True, "已解除封禁"
+
+
+def systemd_unit_paths(service_name=MONITOR_SERVICE_NAME):
+    return ("/etc/systemd/system/" + service_name + ".service", "/etc/systemd/system/" + service_name + ".timer")
+
+
+def build_monitor_service_content(script_path):
+    return "\n".join(
+        [
+            "[Unit]",
+            "Description=Snell new source notification scan",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            "ExecStart=" + script_path + " --scan-new-source-notify",
+            "",
+        ]
+    )
+
+
+def build_monitor_timer_content(interval_seconds):
+    return "\n".join(
+        [
+            "[Unit]",
+            "Description=Run Snell new source notification scan",
+            "",
+            "[Timer]",
+            "OnBootSec=" + str(interval_seconds) + "s",
+            "OnUnitActiveSec=" + str(interval_seconds) + "s",
+            "AccuracySec=5s",
+            "Persistent=true",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+            "",
+        ]
+    )
+
+
+def install_monitor_timer(interval_seconds):
+    if not shutil.which("systemctl"):
+        return False, "未找到 systemctl，无法开启自动扫描"
+
+    script_path = os.path.abspath(sys.argv[0])
+    service_path, timer_path = systemd_unit_paths()
+    try:
+        with open(service_path, "w", encoding="utf-8") as f:
+            f.write(build_monitor_service_content(script_path))
+        with open(timer_path, "w", encoding="utf-8") as f:
+            f.write(build_monitor_timer_content(interval_seconds))
+    except OSError as exc:
+        return False, "写入 systemd 配置失败：" + str(exc)
+
+    commands = [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", MONITOR_SERVICE_NAME + ".timer"],
+    ]
+    for command in commands:
+        try:
+            subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False, "systemd 命令执行失败：" + " ".join(command)
+
+    return True, "自动扫描已开启。"
+
+
+def disable_monitor_timer():
+    if not shutil.which("systemctl"):
+        return False, "未找到 systemctl，无法关闭自动扫描"
+
+    commands = [
+        ["systemctl", "disable", "--now", MONITOR_SERVICE_NAME + ".timer"],
+        ["systemctl", "daemon-reload"],
+    ]
+    for command in commands:
+        try:
+            subprocess.call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            return False, "systemd 命令执行失败：" + " ".join(command)
+
+    return True, "自动扫描已关闭。"
+
+
+def is_monitor_enabled():
+    if not shutil.which("systemctl"):
+        return False
+    return subprocess.call(
+        ["systemctl", "is-active", "--quiet", MONITOR_SERVICE_NAME + ".timer"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    ) == 0
+
+
+def enable_new_source_monitor(port, server_name, bot_token, chat_id, scan_interval):
+    server_name = server_name.strip()
+    bot_token = bot_token.strip()
+    chat_id = chat_id.strip()
+    config = {
+        "server_name": server_name,
+        "telegram_bot_token": bot_token,
+        "telegram_chat_id": chat_id,
+        "scan_interval": scan_interval,
+    }
+    save_monitor_config(MONITOR_CONFIG_PATH, config)
+
+    if not bot_token or not chat_id:
+        disable_monitor_timer()
+        return True, "未填写 Telegram 信息，已关闭通知。"
+
+    state = load_monitor_state(MONITOR_STATE_PATH)
+    state["initialized"] = False
+    state["seen_sources"] = {}
+    save_monitor_state(MONITOR_STATE_PATH, state)
+
+    ok, message = scan_new_source_notifications(port)
+    if not ok:
+        return False, message
+
+    return install_monitor_timer(scan_interval)
+
+
+def normalize_location(country, region, city):
+    country = normalize_area_name((country or "").strip())
+    region = (region or "").strip()
+    city = (city or "").strip()
+    province = normalize_area_name(region)
+    city_name = normalize_china_city_name(country, province, city)
+
+    location = ""
+    if province and city_name and province != city_name:
+        location = province + city_name
+    elif city_name:
+        location = city_name
+    elif province:
+        location = province
+
+    if country and country not in ("中国", "中华人民共和国"):
+        return country + location if location else country
+    if location:
+        return location
+    return "地区未知"
+
+
+def needs_china_location_fallback(country, region, city):
+    country = normalize_area_name((country or "").strip())
+    province = normalize_area_name((region or "").strip())
+    city_name = normalize_area_name((city or "").strip())
+
+    if country not in ("中国", "中华人民共和国"):
+        return False
+    if not province:
+        return False
+    if not city_name:
+        return True
+    return bool(re.search(r"[A-Za-z]", city_name))
+
+
+def normalize_pconline_location(data):
+    province = normalize_area_name((data.get("pro") or "").strip())
+    city = normalize_area_name((data.get("city") or "").strip())
+
+    if province and city and province != city:
+        return province + city
+    if city:
+        return city
+    if province:
+        return province
+    return "地区未知"
+
+
+def normalize_china_city_name(country, province, city):
+    city_name = normalize_area_name(city)
+
+    if country not in ("中国", "中华人民共和国"):
+        return city_name
+
+    if re.search(r"[A-Za-z]", city_name):
+        return ""
+
+    return city_name
+
+
+def normalize_area_name(value):
+    if not value or value == "地区未知":
+        return value
+
+    suffixes = (
+        "维吾尔自治区",
+        "壮族自治区",
+        "回族自治区",
+        "自治区",
+        "特别行政区",
+        "省",
+        "市",
+    )
+    for suffix in suffixes:
+        if value.endswith(suffix):
+            return value[: -len(suffix)]
+
+    return value
+
+
+def normalize_isp(value):
+    text = (value or "").strip()
+    lower = text.lower()
+
+    if not text:
+        return "运营商未知"
+    if "chinanet" in lower or "china telecom" in lower:
+        return "电信"
+    if "china mobile" in lower or "cmcc" in lower:
+        return "移动"
+    if "china unicom" in lower or "unicom" in lower or "china169" in lower or "cnc group" in lower:
+        return "联通"
+    if "china education" in lower or "cernet" in lower:
+        return "教育网"
+    if "china broadnet" in lower or "broadcast" in lower:
+        return "广电"
+    if "tencent" in lower:
+        return "腾讯云"
+    if "dmit" in lower:
+        return "DMIT云"
+    if "ovh" in lower:
+        return "OVH"
+    if "digitalocean" in lower:
+        return "DigitalOcean"
+    if "vultr" in lower:
+        return "Vultr"
+    if "linode" in lower or "akamai" in lower:
+        return "Linode"
+    if "oracle" in lower:
+        return "甲骨文云"
+    if "alibaba" in lower or "aliyun" in lower:
+        return "阿里云"
+    if "huawei" in lower:
+        return "华为云"
+    if "baidu" in lower:
+        return "百度云"
+    if "amazon" in lower or "aws" in lower:
+        return "亚马逊云"
+    if "cloudflare" in lower:
+        return "Cloudflare"
+    if "google" in lower:
+        return "谷歌"
+    if "microsoft" in lower or "azure" in lower:
+        return "微软云"
+
+    return text
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--scan-new-source-notify":
+        port = get_snell_port()
+        if not port:
+            print("未能自动识别 Snell 端口。可用 SNELL_PORT=端口 手动指定。", file=sys.stderr)
+            return 2
+        ok, message = scan_new_source_notifications(port)
+        print(message)
+        return 0 if ok else 1
+
+    port = get_snell_port()
+    if not port:
+        print("未能自动识别 Snell 端口。可用 SNELL_PORT=端口 手动指定。", file=sys.stderr)
+        print("例如：SNELL_PORT=49376 /root/服务器使用人数查询", file=sys.stderr)
+        return 2
+
+    if not sys.stdin.isatty():
+        print_summary(port)
+        return 0
+
+    if os.environ.pop("SNELL_QUERY_CLEAR_ON_START", "") == "1":
+        refresh_screen()
+
+    ensure_shortcut_installed()
+    return show_menu(port)
+
+
+def print_summary(port):
+    details = get_visible_ip_details(port)
+
+    shanghai_tz = timezone(timedelta(hours=8))
+    now = datetime.now(shanghai_tz).strftime("%Y-%m-%d %H:%M:%S")
+    print("查询时间：" + now)
+    print("Snell 端口：" + str(port))
+    print("当前公网 IP 数：" + str(len(details)))
+    print()
+    if not details:
+        print("0")
+        return
+
+    for line in format_query_detail_lines(details):
+        print(line)
+
+
+def refresh_screen():
+    if sys.stdout.isatty() and os.environ.get("TERM") and shutil.which("clear"):
+        subprocess.call(["clear"], stderr=subprocess.DEVNULL)
+    else:
+        print()
+
+
+def clear_screen_on_exit():
+    if sys.stdout.isatty() and os.environ.get("TERM") and shutil.which("clear"):
+        subprocess.call(["clear"], stderr=subprocess.DEVNULL)
+    else:
+        print()
+
+
+def print_screen_title(title):
+    print(title)
+    print()
+    try:
+        sys.stdout.flush()
+    except OSError:
+        pass
+    if sys.stdout.isatty():
+        time.sleep(0.1)
+
+
+def pause_before_prompt():
+    try:
+        sys.stdout.flush()
+    except OSError:
+        pass
+    if sys.stdout.isatty():
+        time.sleep(0.5)
+
+
+def read_prompt(prompt):
+    pause_before_prompt()
+    return input(prompt)
+
+
+def show_menu(port):
+    while True:
+        print()
+        print("1. 查询 IP 连接情况")
+        print("2. 按 IP 封禁")
+        print("3. 解除 IP 封禁")
+        print("4. 新来源自动通知")
+        print("0. 退出脚本")
+        print("00. 更新脚本")
+        choice = read_prompt("请选择：").strip().lower()
+
+        if choice == "00":
+            update_result = self_update()
+            if update_result == UPDATE_FAILED:
+                wait_return()
+            elif update_result == UPDATE_ALREADY_LATEST:
+                time.sleep(1)
+            refresh_screen()
+            continue
+        if choice in ("0", "q", "quit", "exit"):
+            clear_screen_on_exit()
+            return 0
+        if choice == "1":
+            refresh_screen()
+            query_ip_details(port)
+            continue
+        if choice == "2":
+            refresh_screen()
+            block_by_ip(port)
+            continue
+        if choice == "3":
+            refresh_screen()
+            unblock_by_ip(port)
+            continue
+        if choice == "4":
+            refresh_screen()
+            new_source_notify_menu(port)
+            continue
+
+        print("无效选项")
+
+
+def wait_return():
+    while True:
+        selected = read_prompt("0 返回上一级菜单：").strip()
+        if selected == "0":
+            return
+        print("无效选项")
+
+
+def query_ip_details(port):
+    print_screen_title("查询 IP 连接情况")
+    print_summary(port)
+    wait_return()
+
+
+def block_by_ip(port):
+    while True:
+        print_screen_title("按 IP 封禁")
+        details = get_visible_ip_details(port)
+        if not details:
+            print("当前没有可封禁的公网 IP")
+            wait_return()
+            return
+
+        sorted_ips = [ip for ip, _detail in sorted_ip_details(details)]
+        for line in format_block_menu_lines(details):
+            print(line)
+
+        selected = read_prompt("输入要封禁的序号，0 返回上一级菜单：").strip()
+        if selected == "0":
+            return
+        if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
+            print("无效序号")
+            wait_return()
+            refresh_screen()
+            continue
+
+        ip = sorted_ips[int(selected) - 1]
+        _ok, message = run_block_commands(ip, port)
+        print(message)
+        time.sleep(1)
+        refresh_screen()
+
+
+def unblock_by_ip(port):
+    while True:
+        print_screen_title("解除 IP 封禁")
+        blocked_entries = get_blocked_ip_entries(port)
+        if not blocked_entries:
+            print("当前没有这个 Snell 端口的封禁 IP")
+            wait_return()
+            return
+
+        active_details = get_active_ip_details(port)
+        sorted_ips = sorted(blocked_entries)
+        for index, ip in enumerate(sorted_ips, start=1):
+            label = get_blocked_ip_label(ip, active_details)
+            protocols = "/".join(blocked_entries[ip].get("protocols", []))
+            print(f"{index}. {label} {ip} 已封禁协议：{protocols}")
+
+        selected = read_prompt("输入要解除封禁的序号，0 返回上一级菜单：").strip()
+        if selected == "0":
+            return
+        if not selected.isdigit() or int(selected) < 1 or int(selected) > len(sorted_ips):
+            print("无效序号")
+            wait_return()
+            refresh_screen()
+            continue
+
+        ip = sorted_ips[int(selected) - 1]
+        ok, message = run_unblock_commands(blocked_entries[ip])
+        if ok:
+            print(message + "：" + ip)
+        else:
+            print(message)
+        time.sleep(1)
+        refresh_screen()
+
+
+def parse_scan_interval(value):
+    value = value.strip()
+    if not value:
+        return 60
+    if not value.isdigit() or int(value) <= 0:
+        return None
+    return int(value)
+
+
+def new_source_notify_menu(port):
+    while True:
+        print_screen_title("新来源自动通知")
+        print("当前状态：" + ("已开启" if is_monitor_enabled() else "已关闭"))
+        print()
+        print("1. 开启自动扫描")
+        print("2. 关闭自动扫描")
+        print("0. 返回")
+        choice = read_prompt("请选择：").strip().lower()
+
+        if choice == "0":
+            return
+        if choice == "1":
+            server_name = input("请输入服务器名称：").strip()
+            bot_token = input("请输入 Telegram Bot Token：").strip()
+            chat_id = input("请输入 Telegram Chat ID：").strip()
+            interval = parse_scan_interval(input("请输入扫描间隔秒数，默认 60："))
+            if not server_name or interval is None:
+                print("输入无效")
+                wait_return()
+                refresh_screen()
+                continue
+
+            print("正在开启自动扫描...", flush=True)
+            ok, message = enable_new_source_monitor(port, server_name, bot_token, chat_id, interval)
+            print(message)
+            wait_return()
+            refresh_screen()
+            continue
+        if choice == "2":
+            print("正在关闭自动扫描...", flush=True)
+            _ok, message = disable_monitor_timer()
+            print(message)
+            wait_return()
+            refresh_screen()
+            continue
+
+        print("无效选项")
+        wait_return()
+        refresh_screen()
+
+if __name__ == "__main__":
+    raise SystemExit(main())
