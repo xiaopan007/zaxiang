@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.7
+// @version      1.0.8
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -89,6 +89,15 @@
     'zt.svg': '从剪贴板粘贴'
   };
 
+  const NAVIGATION_LABELS = {
+    订阅: '订阅管理',
+    文件: '文件管理',
+    同步: '同步',
+    分享: '分享管理',
+    归档: '归档',
+    我的: '我的'
+  };
+
   function isSubStore() {
     let score = 0;
     const title = document.title.trim().toLowerCase();
@@ -126,16 +135,15 @@
 
   function installInfrastructure() {
     installStyles();
-    ensureLiveRegion();
     ensureSkipLink();
     document.addEventListener('keydown', handleCustomControlKey);
-    window.addEventListener('popstate', announceRouteChange);
-    window.addEventListener('hashchange', announceRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+    window.addEventListener('hashchange', handleRouteChange);
     for (const method of ['pushState', 'replaceState']) {
       const original = history[method];
       history[method] = function (...args) {
         const result = original.apply(this, args);
-        announceRouteChange();
+        handleRouteChange();
         return result;
       };
     }
@@ -167,11 +175,6 @@
       [data-sub-store-a11y="active"] input,
       [data-sub-store-a11y="active"] select,
       [data-sub-store-a11y="active"] textarea { font-size: max(16px, 1em); }
-      .sub-store-a11y-visually-hidden {
-        position: absolute !important; inline-size: 1px !important; block-size: 1px !important;
-        padding: 0 !important; margin: -1px !important; overflow: hidden !important;
-        clip: rect(0 0 0 0) !important; white-space: nowrap !important; border: 0 !important;
-      }
       @media (prefers-reduced-motion: reduce) {
         [data-sub-store-a11y="active"] *, [data-sub-store-a11y="active"] *::before,
         [data-sub-store-a11y="active"] *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
@@ -182,17 +185,6 @@
       }
     `;
     (document.head || document.documentElement).append(style);
-  }
-
-  function ensureLiveRegion() {
-    if (document.querySelector('#sub-store-a11y-live') || !document.body) return;
-    const live = document.createElement('div');
-    live.id = 'sub-store-a11y-live';
-    live.className = 'sub-store-a11y-visually-hidden';
-    live.setAttribute('role', 'status');
-    live.setAttribute('aria-live', 'polite');
-    live.setAttribute('aria-atomic', 'true');
-    document.body.append(live);
   }
 
   function ensureSkipLink() {
@@ -212,13 +204,8 @@
     document.body.prepend(skip);
   }
 
-  function announceRouteChange() {
-    queueMicrotask(() => {
-      ensureLiveRegion();
-      const live = document.querySelector('#sub-store-a11y-live');
-      if (live) live.textContent = '页面已更新';
-      queueEnhancement();
-    });
+  function handleRouteChange() {
+    queueMicrotask(queueEnhancement);
   }
 
   function handleCustomControlKey(event) {
@@ -250,7 +237,7 @@
     }
     if (element.classList.contains('copy-sub-link') && element.querySelector('svg[data-icon="clone"]')) return '复制订阅链接';
     if (element.querySelector('svg[data-icon="angles-right"]')) {
-      return /rotate\(180deg\)/.test(element.style.transform) ? '收起操作抽屉' : '展开操作抽屉';
+      return /rotate\(180deg\)/.test(element.style.transform) ? '关闭复制、导出和删除操作' : '打开复制、导出和删除操作';
     }
     const image = element.matches('img[src]') ? element : element.querySelector('img[src]');
     const imageName = image?.getAttribute('src')?.split('/').pop()?.split('?')[0];
@@ -445,14 +432,16 @@
       if (!navigation.hasAttribute('aria-label')) navigation.setAttribute('aria-label', '主要导航');
     });
     root.querySelectorAll('.menu-item').forEach((item) => {
-      makeKeyboardControl(item, 'button', visibleText(item));
+      const text = visibleText(item);
+      makeKeyboardControl(item, 'button', NAVIGATION_LABELS[text] || text);
+      item.querySelectorAll('i, svg').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));
       if (item.classList.contains('active')) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
     root.querySelectorAll('.tag').forEach((tag) => {
       tag.setAttribute('role', 'button');
       if (!tag.hasAttribute('tabindex')) tag.tabIndex = 0;
-      tag.setAttribute('aria-pressed', String(tag.classList.contains('current') || tag.classList.contains('active')));
+      tag.removeAttribute('aria-pressed');
     });
     root.querySelectorAll('.list-title').forEach((title) => {
       title.setAttribute('role', 'button');
@@ -505,7 +494,7 @@
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
       control.removeAttribute('aria-expanded');
-      setControlLabel(control, expanded ? '收起操作抽屉' : '展开操作抽屉');
+      setControlLabel(control, expanded ? '关闭复制、导出和删除操作' : '打开复制、导出和删除操作');
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
       const label = inferredLabel(control);
@@ -541,7 +530,7 @@
       const title = titleElement ? visibleText(titleElement) : '';
       const source = detail ? visibleText(detail) : '';
       if (detail && title && /订阅/.test(source)) {
-        makeKeyboardControl(detail, 'button', `预览/拷贝订阅：${title}`);
+        makeKeyboardControl(detail, 'button', '预览/拷贝订阅');
         detail.removeAttribute('aria-description');
       }
       if (wrapper.querySelector('button, a[href]')) {
