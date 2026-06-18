@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.10
+// @version      1.0.11
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -217,7 +217,7 @@
   }
 
   function hasAccessibleName(element) {
-    if (element.hasAttribute('aria-label') || element.hasAttribute('aria-labelledby')) return true;
+    if (cleanText(element.getAttribute('aria-label')) || cleanText(element.getAttribute('aria-labelledby'))) return true;
     if ((element.getAttribute('title') || '').trim()) return true;
     if ((element.textContent || '').trim()) return true;
     return Boolean(element.querySelector('img[alt]:not([alt=""])'));
@@ -232,12 +232,12 @@
     if (element.classList.contains('submit-btn')) return visibleText(element) || '保存';
     if (element.classList.contains('compare-sub-link')) {
       if (element.querySelector('svg[data-icon="square-arrow-up-right"]')) return '打开订阅服务页面';
-      if (element.querySelector('svg[data-icon="eye"]')) return '预览订阅';
+      if (element.querySelector('svg[data-icon="eye"]')) return '生成节点对比';
       return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
     }
     if (element.classList.contains('copy-sub-link') && element.querySelector('svg[data-icon="clone"]')) return '复制订阅链接';
     if (element.querySelector('svg[data-icon="angles-right"]')) {
-      return /rotate\(180deg\)/.test(element.style.transform) ? '关闭复制、导出和删除操作' : '打开复制、导出和删除操作';
+      return /rotate\(180deg\)/.test(element.style.transform) ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作';
     }
     const image = element.matches('img[src]') ? element : element.querySelector('img[src]');
     const imageName = image?.getAttribute('src')?.split('/').pop()?.split('?')[0];
@@ -488,6 +488,14 @@
       if (copy) setControlLabel(copy, `复制 ${name} 链接`);
     });
     root.querySelectorAll('.compare-sub-link').forEach((control) => {
+      if (control.querySelector('svg[data-icon="square-arrow-up-right"]')) {
+        setControlLabel(control, '打开订阅服务页面');
+        return;
+      }
+      if (control.querySelector('svg[data-icon="eye"]')) {
+        setControlLabel(control, '生成节点对比');
+        return;
+      }
       if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
       control.removeAttribute('aria-expanded');
@@ -496,7 +504,7 @@
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
       control.removeAttribute('aria-expanded');
-      setControlLabel(control, expanded ? '关闭复制、导出和删除操作' : '打开复制、导出和删除操作');
+      setControlLabel(control, expanded ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作');
       const drawer = control.closest('.nut-swipe')?.querySelector('.nut-swipe__right');
       if (!drawer) return;
       if (expanded) {
