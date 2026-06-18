@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.3
+// @version      1.0.4
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -48,7 +48,6 @@
     'pen-nib': '编辑订阅',
     pen: '编辑',
     'pen-to-square': '编辑',
-    'angles-right': '复制订阅链接',
     copy: '复制',
     link: '复制分享链接',
     clone: '复制分享配置',
@@ -121,7 +120,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'hidden', 'aria-hidden', 'data-icon']
+      attributeFilter: ['class', 'hidden', 'aria-hidden', 'data-icon', 'style']
     });
   }
 
@@ -240,6 +239,9 @@
   function inferredLabel(element) {
     if (element.classList.contains('compare-sub-link')) {
       return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
+    }
+    if (element.querySelector('svg[data-icon="angles-right"]')) {
+      return /rotate\(180deg\)/.test(element.style.transform) ? '收起操作抽屉' : '展开操作抽屉';
     }
     const image = element.matches('img[src]') ? element : element.querySelector('img[src]');
     const imageName = image?.getAttribute('src')?.split('/').pop()?.split('?')[0];
@@ -461,6 +463,11 @@
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
       control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
+    });
+    root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
+      const expanded = /rotate\(180deg\)/.test(control.style.transform);
+      control.setAttribute('aria-expanded', String(expanded));
+      setControlLabel(control, expanded ? '收起操作抽屉' : '展开操作抽屉');
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
       const label = inferredLabel(control);
