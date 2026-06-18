@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.12
+// @version      1.0.13
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -301,6 +301,11 @@
       if (hasAccessibleName(element)) return;
       element.setAttribute('aria-label', inferredLabel(element) || (element.matches('a[href]') ? '打开链接' : '操作按钮'));
       element.dataset.a11yGeneratedLabel = 'true';
+    });
+    root.querySelectorAll('button svg, button i, a[href] svg, a[href] i, [role="button"] svg, [role="button"] i').forEach((icon) => {
+      if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
+      if (icon.getAttribute('focusable') !== 'false') icon.setAttribute('focusable', 'false');
+      if (icon.getAttribute('tabindex') !== '-1') icon.setAttribute('tabindex', '-1');
     });
   }
 
