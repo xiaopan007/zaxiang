@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.9
+// @version      1.0.10
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -497,6 +497,15 @@
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
       control.removeAttribute('aria-expanded');
       setControlLabel(control, expanded ? '关闭复制、导出和删除操作' : '打开复制、导出和删除操作');
+      const drawer = control.closest('.nut-swipe')?.querySelector('.nut-swipe__right');
+      if (!drawer) return;
+      if (expanded) {
+        if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
+        if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
+      } else {
+        if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
+        if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
+      }
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
       const label = inferredLabel(control);
