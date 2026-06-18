@@ -1,7 +1,9 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.0
+// @version      1.0.1
+// @author       xiaopan007
+// @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @updateURL    https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
 // @downloadURL  https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
@@ -27,8 +29,6 @@
   const CLASS_LABELS = [
     ['navBar-left-icon--refresh', '刷新'],
     ['navBar-left-icon--add', '新建'],
-    ['compare-sub-link', '更多操作'],
-    ['sub-item-menu', '更多操作'],
     ['nut-popup__close-icon', '关闭'],
     ['include-subs-trigger', '选择手动订阅'],
     ['failure-mode-trigger', '选择订阅失败处理方式'],
@@ -110,7 +110,7 @@
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'hidden', 'aria-hidden']
+      attributeFilter: ['class', 'hidden', 'aria-hidden', 'data-icon']
     });
   }
 
@@ -227,6 +227,9 @@
   }
 
   function inferredLabel(element) {
+    if (element.classList.contains('compare-sub-link')) {
+      return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
+    }
     const icon = element.matches('svg[data-icon]')
       ? element.getAttribute('data-icon')
       : element.querySelector('svg[data-icon]')?.getAttribute('data-icon');
@@ -427,9 +430,19 @@
       title.setAttribute('role', 'button');
       if (!title.hasAttribute('tabindex')) title.tabIndex = 0;
     });
-    root.querySelectorAll('.nut-button, .nut-popup__close-icon, .sub-item-menu').forEach((control) => {
+    root.querySelectorAll('.nut-button, .nut-popup__close-icon').forEach((control) => {
       if (control.closest('button, a[href]')) return;
       makeKeyboardControl(control, 'button');
+    });
+    root.querySelectorAll('.sub-item-menu').forEach((group) => {
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', '订阅操作');
+      group.removeAttribute('tabindex');
+    });
+    root.querySelectorAll('.compare-sub-link').forEach((control) => {
+      const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
+      control.setAttribute('aria-expanded', String(expanded));
+      setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
     });
     root.querySelectorAll('.include-subs-trigger, .failure-mode-trigger').forEach((control) => {
       makeKeyboardControl(control, 'button', inferredLabel(control));
