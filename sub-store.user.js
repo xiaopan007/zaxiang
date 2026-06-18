@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.5
+// @version      1.0.6
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -530,6 +530,14 @@
       makeKeyboardControl(control, 'button', context ? `展开或收起${context}` : '切换展开状态');
     });
     root.querySelectorAll('.sub-item-wrapper').forEach((wrapper) => {
+      const detail = wrapper.querySelector('.sub-item-detail');
+      const titleElement = wrapper.querySelector('.sub-item-title');
+      const title = titleElement ? visibleText(titleElement) : '';
+      const source = detail ? visibleText(detail) : '';
+      if (detail && title && /订阅/.test(source)) {
+        makeKeyboardControl(detail, 'link', `预览/拷贝订阅：${title}`);
+        detail.setAttribute('aria-description', `来源：${source}`);
+      }
       if (wrapper.querySelector('button, a[href]')) {
         wrapper.querySelectorAll('.sub-item-title-wrapper[role="link"], .sub-item-content[role="link"]').forEach((target) => {
           target.removeAttribute('role');
