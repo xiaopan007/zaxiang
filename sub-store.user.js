@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.13
+// @version      1.0.14
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -137,6 +137,7 @@
     installStyles();
     ensureSkipLink();
     document.addEventListener('keydown', handleCustomControlKey);
+    document.addEventListener('focusin', redirectNestedIconFocus, true);
     window.addEventListener('popstate', handleRouteChange);
     window.addEventListener('hashchange', handleRouteChange);
     for (const method of ['pushState', 'replaceState']) {
@@ -214,6 +215,13 @@
     if (!control || control.matches('button, a[href], input, select, textarea')) return;
     event.preventDefault();
     control.click();
+  }
+
+  function redirectNestedIconFocus(event) {
+    const icon = event.target;
+    if (!(icon instanceof Element) || !icon.matches('svg, i')) return;
+    const owner = icon.closest('button, a[href], [role="button"]');
+    if (owner && owner !== icon) owner.focus();
   }
 
   function hasAccessibleName(element) {
@@ -501,7 +509,9 @@
         return;
       }
       if (control.querySelector('svg[data-icon="eye"]')) {
-        setControlLabel(control, '生成节点对比');
+        control.removeAttribute('aria-labelledby');
+        if (control.getAttribute('aria-label') !== '生成节点对比') control.setAttribute('aria-label', '生成节点对比');
+        control.dataset.a11yGeneratedLabel = 'true';
         return;
       }
       if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
@@ -513,14 +523,28 @@
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
       control.removeAttribute('aria-expanded');
       setControlLabel(control, expanded ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作');
-      const drawer = control.closest('.nut-swipe')?.querySelector('.nut-swipe__right');
+      const swipe = control.closest('.nut-swipe');
+      const drawer = swipe?.querySelector('.nut-swipe__right');
+      const content = swipe?.querySelector('.nut-swipe__content');
       if (!drawer) return;
       if (expanded) {
         if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
         if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
+        if (content) {
+          if (!drawer.id) drawer.id = `sub-store-a11y-drawer-${++generatedId}`;
+          if (!content.id) content.id = `sub-store-a11y-content-${++generatedId}`;
+          if (!swipe.hasAttribute('aria-owns') || swipe.dataset.a11yGeneratedOwns === 'true') {
+            swipe.setAttribute('aria-owns', `${drawer.id} ${content.id}`);
+            swipe.dataset.a11yGeneratedOwns = 'true';
+          }
+        }
       } else {
         if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
         if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
+        if (swipe?.dataset.a11yGeneratedOwns === 'true') {
+          swipe.removeAttribute('aria-owns');
+          delete swipe.dataset.a11yGeneratedOwns;
+        }
       }
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
