@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.8
+// @version      1.0.9
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -434,7 +434,9 @@
     root.querySelectorAll('.menu-item').forEach((item) => {
       const text = visibleText(item);
       makeKeyboardControl(item, 'button', NAVIGATION_LABELS[text] || text);
-      item.querySelectorAll('i, svg').forEach((icon) => icon.setAttribute('aria-hidden', 'true'));
+      item.querySelectorAll('i, svg').forEach((icon) => {
+        if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
+      });
       if (item.classList.contains('active')) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
