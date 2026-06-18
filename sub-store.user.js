@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.2
+// @version      1.0.3
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -33,7 +33,7 @@
     ['include-subs-trigger', '选择手动订阅'],
     ['failure-mode-trigger', '选择订阅失败处理方式'],
     ['nut-drag', '拖动排序'],
-    ['refresh-sub-flow', '编辑处理流程'],
+    ['refresh-sub-flow', '编辑订阅'],
     ['copy-sub-link', '复制订阅链接']
   ];
 
@@ -45,7 +45,7 @@
     'magnifying-glass': '搜索',
     ellipsis: '更多操作',
     'ellipsis-vertical': '更多操作',
-    'pen-nib': '编辑处理流程',
+    'pen-nib': '编辑订阅',
     pen: '编辑',
     'pen-to-square': '编辑',
     'angles-right': '复制订阅链接',
