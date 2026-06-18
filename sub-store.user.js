@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.6
+// @version      1.0.7
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -237,6 +237,12 @@
   }
 
   function inferredLabel(element) {
+    if (element.classList.contains('upload-all-btn')) {
+      if (element.querySelector('svg[data-icon="cloud-arrow-up"]')) return '上传全部同步配置';
+      if (element.querySelector('svg[data-icon="cloud-arrow-down"]')) return '下载同步配置';
+    }
+    if (element.classList.contains('preview-btn')) return '预览同步配置';
+    if (element.classList.contains('submit-btn')) return visibleText(element) || '保存';
     if (element.classList.contains('compare-sub-link')) {
       if (element.querySelector('svg[data-icon="square-arrow-up-right"]')) return '打开订阅服务页面';
       if (element.querySelector('svg[data-icon="eye"]')) return '预览订阅';
@@ -439,8 +445,7 @@
       if (!navigation.hasAttribute('aria-label')) navigation.setAttribute('aria-label', '主要导航');
     });
     root.querySelectorAll('.menu-item').forEach((item) => {
-      item.setAttribute('role', 'link');
-      if (!item.hasAttribute('tabindex')) item.tabIndex = 0;
+      makeKeyboardControl(item, 'button', visibleText(item));
       if (item.classList.contains('active')) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
     });
@@ -475,7 +480,8 @@
       drawer.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn').forEach((wrapper) => {
         const control = wrapper.querySelector('a[href], button, .nut-button');
         if (!control) return;
-        if (control.matches('.nut-button')) makeKeyboardControl(control, 'button');
+        control.setAttribute('role', 'button');
+        if (!control.hasAttribute('tabindex')) control.tabIndex = 0;
         if (control.querySelector('svg[data-icon="paste"]')) setControlLabel(control, `复制${objectName}配置`);
         if (control.querySelector('svg[data-icon="file-export"]')) setControlLabel(control, `导出${objectName}`);
         if (control.querySelector('svg[data-icon="trash-can"], svg[data-icon="trash"]')) setControlLabel(control, `删除${objectName}`);
@@ -493,12 +499,12 @@
     root.querySelectorAll('.compare-sub-link').forEach((control) => {
       if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
-      control.setAttribute('aria-expanded', String(expanded));
+      control.removeAttribute('aria-expanded');
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
     });
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
-      control.setAttribute('aria-expanded', String(expanded));
+      control.removeAttribute('aria-expanded');
       setControlLabel(control, expanded ? '收起操作抽屉' : '展开操作抽屉');
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
@@ -530,13 +536,13 @@
       makeKeyboardControl(control, 'button', context ? `展开或收起${context}` : '切换展开状态');
     });
     root.querySelectorAll('.sub-item-wrapper').forEach((wrapper) => {
-      const detail = wrapper.querySelector('.sub-item-detail');
+      const detail = wrapper.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
       const titleElement = wrapper.querySelector('.sub-item-title');
       const title = titleElement ? visibleText(titleElement) : '';
       const source = detail ? visibleText(detail) : '';
       if (detail && title && /订阅/.test(source)) {
-        makeKeyboardControl(detail, 'link', `预览/拷贝订阅：${title}`);
-        detail.setAttribute('aria-description', `来源：${source}`);
+        makeKeyboardControl(detail, 'button', `预览/拷贝订阅：${title}`);
+        detail.removeAttribute('aria-description');
       }
       if (wrapper.querySelector('button, a[href]')) {
         wrapper.querySelectorAll('.sub-item-title-wrapper[role="link"], .sub-item-content[role="link"]').forEach((target) => {
