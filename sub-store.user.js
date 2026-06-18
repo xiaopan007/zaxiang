@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.4
+// @version      1.0.5
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -53,7 +53,7 @@
     clone: '复制分享配置',
     'file-export': '导出订阅',
     'file-import': '导入',
-    paste: '复制订阅内容',
+    paste: '复制配置',
     trash: '删除',
     'trash-can': '删除',
     xmark: '关闭',
@@ -238,8 +238,11 @@
 
   function inferredLabel(element) {
     if (element.classList.contains('compare-sub-link')) {
+      if (element.querySelector('svg[data-icon="square-arrow-up-right"]')) return '打开订阅服务页面';
+      if (element.querySelector('svg[data-icon="eye"]')) return '预览订阅';
       return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
     }
+    if (element.classList.contains('copy-sub-link') && element.querySelector('svg[data-icon="clone"]')) return '复制订阅链接';
     if (element.querySelector('svg[data-icon="angles-right"]')) {
       return /rotate\(180deg\)/.test(element.style.transform) ? '收起操作抽屉' : '展开操作抽屉';
     }
@@ -459,7 +462,36 @@
       group.setAttribute('aria-label', '订阅操作');
       group.removeAttribute('tabindex');
     });
+    root.querySelectorAll('.nut-swipe__left, .nut-swipe__right').forEach((drawer) => {
+      if (!drawer.querySelector('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn')) return;
+      const actionHref = drawer.querySelector('a[href]')?.getAttribute('href') || '';
+      const objectName = /\/api\/(?:wholeFile|file)\//i.test(actionHref)
+        ? '文件'
+        : /\/api\/collection\//i.test(actionHref)
+          ? '组合订阅'
+          : '订阅';
+      drawer.setAttribute('role', 'group');
+      drawer.setAttribute('aria-label', `${objectName}快捷操作`);
+      drawer.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn').forEach((wrapper) => {
+        const control = wrapper.querySelector('a[href], button, .nut-button');
+        if (!control) return;
+        if (control.matches('.nut-button')) makeKeyboardControl(control, 'button');
+        if (control.querySelector('svg[data-icon="paste"]')) setControlLabel(control, `复制${objectName}配置`);
+        if (control.querySelector('svg[data-icon="file-export"]')) setControlLabel(control, `导出${objectName}`);
+        if (control.querySelector('svg[data-icon="trash-can"], svg[data-icon="trash"]')) setControlLabel(control, `删除${objectName}`);
+      });
+    });
+    root.querySelectorAll('.auto-dialog li').forEach((item) => {
+      const nameElement = item.querySelector('.infos p');
+      const name = nameElement ? visibleText(nameElement) : '';
+      if (!name) return;
+      const preview = item.querySelector('.actions a[href]');
+      const copy = item.querySelector('.actions button');
+      if (preview) setControlLabel(preview, `预览 ${name} 输出`);
+      if (copy) setControlLabel(copy, `复制 ${name} 链接`);
+    });
     root.querySelectorAll('.compare-sub-link').forEach((control) => {
+      if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
       control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
