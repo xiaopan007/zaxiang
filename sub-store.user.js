@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.1
+// @version      1.0.2
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -77,6 +77,17 @@
     eye: '显示',
     'eye-slash': '隐藏',
     gear: '设置'
+  };
+
+  const IMAGE_CONTROL_LABELS = {
+    'jsimg.svg': '切换 JavaScript 语法高亮',
+    'undo.svg': '撤销',
+    'redo.svg': '重做',
+    'format.svg': '格式化内容',
+    'search.svg': '查找内容',
+    'copy.svg': '复制编辑器内容',
+    'del.svg': '清空编辑器内容',
+    'zt.svg': '从剪贴板粘贴'
   };
 
   function isSubStore() {
@@ -230,6 +241,13 @@
     if (element.classList.contains('compare-sub-link')) {
       return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
     }
+    const image = element.matches('img[src]') ? element : element.querySelector('img[src]');
+    const imageName = image?.getAttribute('src')?.split('/').pop()?.split('?')[0];
+    if (imageName === 'more.svg') {
+      const toolbar = element.closest('.cm-img-button');
+      return toolbar?.querySelector(':scope > div') ? '收起编辑器工具栏' : '展开编辑器工具栏';
+    }
+    if (IMAGE_CONTROL_LABELS[imageName]) return IMAGE_CONTROL_LABELS[imageName];
     const icon = element.matches('svg[data-icon]')
       ? element.getAttribute('data-icon')
       : element.querySelector('svg[data-icon]')?.getAttribute('data-icon');
@@ -444,6 +462,13 @@
       control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
     });
+    root.querySelectorAll('.cm-img-button button').forEach((control) => {
+      const label = inferredLabel(control);
+      if (label) setControlLabel(control, label);
+      if (control.querySelector('img[src$="/images/more.svg"], img[src$="/more.svg"]')) {
+        control.setAttribute('aria-expanded', String(Boolean(control.closest('.cm-img-button')?.querySelector(':scope > div'))));
+      }
+    });
     root.querySelectorAll('.include-subs-trigger, .failure-mode-trigger').forEach((control) => {
       makeKeyboardControl(control, 'button', inferredLabel(control));
     });
@@ -466,9 +491,14 @@
       makeKeyboardControl(control, 'button', context ? `展开或收起${context}` : '切换展开状态');
     });
     root.querySelectorAll('.sub-item-wrapper').forEach((wrapper) => {
-      const target = wrapper.querySelector('button, a[href]')
-        ? wrapper.querySelector('.sub-item-title-wrapper, .sub-item-content')
-        : wrapper;
+      if (wrapper.querySelector('button, a[href]')) {
+        wrapper.querySelectorAll('.sub-item-title-wrapper[role="link"], .sub-item-content[role="link"]').forEach((target) => {
+          target.removeAttribute('role');
+          target.removeAttribute('tabindex');
+        });
+        return;
+      }
+      const target = wrapper;
       if (!target) return;
       target.setAttribute('role', 'link');
       if (!target.hasAttribute('tabindex')) target.tabIndex = 0;
