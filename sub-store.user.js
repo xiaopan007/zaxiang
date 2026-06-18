@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.11
+// @version      1.0.12
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -446,8 +446,11 @@
       tag.removeAttribute('aria-pressed');
     });
     root.querySelectorAll('.list-title').forEach((title) => {
-      title.setAttribute('role', 'button');
-      if (!title.hasAttribute('tabindex')) title.tabIndex = 0;
+      const text = title.querySelector('.list-title-text');
+      makeKeyboardControl(title, 'button', (text ? visibleText(text) : '') || visibleText(title));
+      title.querySelectorAll('i, svg').forEach((icon) => {
+        if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
+      });
     });
     root.querySelectorAll('.nut-button, .nut-popup__close-icon').forEach((control) => {
       if (control.closest('button, a[href]')) return;
@@ -545,6 +548,11 @@
     });
     root.querySelectorAll('.sub-item-wrapper').forEach((wrapper) => {
       const detail = wrapper.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
+      const titleWrapper = wrapper.querySelector('.sub-item-title-wrapper');
+      if (detail && titleWrapper && detail.parentElement === titleWrapper.parentElement
+        && (detail.compareDocumentPosition(titleWrapper) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+        detail.before(titleWrapper);
+      }
       const titleElement = wrapper.querySelector('.sub-item-title');
       const title = titleElement ? visibleText(titleElement) : '';
       const source = detail ? visibleText(detail) : '';
