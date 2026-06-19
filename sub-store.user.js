@@ -3,7 +3,7 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.28
+// @version      1.0.29
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
@@ -197,8 +197,6 @@
         [data-sub-store-a11y="active"] :focus-visible { outline-color: Highlight !important; }
         .sub-store-a11y-skip-link { color: LinkText; background: Canvas; }
       }
-      .sub-store-a11y-drawer-inline { overflow: visible !important; }
-      .sub-store-a11y-drawer-collapsed { visibility: hidden !important; }
     `;
     (document.head || document.documentElement).append(style);
   }
@@ -224,12 +222,16 @@
     queueMicrotask(queueEnhancement);
   }
 
+  function isSubscriptionDrawerExpanded(trigger) {
+    return trigger instanceof Element && /rotate\(180deg\)/.test(trigger.style.transform);
+  }
+
   function routeSubscriptionDrawerFocus(event) {
     if (event.key !== 'Tab' || !(event.target instanceof Element)) return;
     const swipe = event.target.closest('.nut-swipe');
     if (!swipe) return;
     const trigger = swipe.querySelector('button:has(svg[data-icon="angles-right"])');
-    if (trigger?.getAttribute('aria-expanded') !== 'true') return;
+    if (!isSubscriptionDrawerExpanded(trigger)) return;
     const drawer = swipe.querySelector('.nut-swipe__right');
     const preview = swipe.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
     const actions = Array.from(drawer?.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn') || [])
@@ -324,7 +326,7 @@
     }
     if (element.classList.contains('copy-sub-link') && element.querySelector('svg[data-icon="clone"]')) return '复制订阅链接';
     if (element.querySelector('svg[data-icon="angles-right"]')) {
-      return /rotate\(180deg\)/.test(element.style.transform) ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作';
+      return isSubscriptionDrawerExpanded(element) ? '隐藏复制、导出和删除操作' : '显示复制、导出和删除操作';
     }
     const image = element.matches('img[src]') ? element : element.querySelector('img[src]');
     const imageName = image?.getAttribute('src')?.split('/').pop()?.split('?')[0];
@@ -633,9 +635,9 @@
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
     });
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
-      const expanded = /rotate\(180deg\)/.test(control.style.transform);
-      control.setAttribute('aria-expanded', String(expanded));
-      setControlLabel(control, expanded ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作');
+      const expanded = isSubscriptionDrawerExpanded(control);
+      control.removeAttribute('aria-expanded');
+      setControlLabel(control, expanded ? '隐藏复制、导出和删除操作' : '显示复制、导出和删除操作');
       const swipe = control.closest('.nut-swipe');
       const drawer = swipe?.querySelector('.nut-swipe__right');
       const content = swipe?.querySelector('.nut-swipe__content');
@@ -657,8 +659,11 @@
       });
       swipe.querySelectorAll('.sub-store-a11y-drawer-actions').forEach((legacyProxy) => legacyProxy.remove());
       if (drawer.classList.contains('sub-store-a11y-drawer-hidden')) drawer.classList.remove('sub-store-a11y-drawer-hidden');
+      if (drawer.classList.contains('sub-store-a11y-drawer-collapsed')) drawer.classList.remove('sub-store-a11y-drawer-collapsed');
       const preview = content?.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
       const wrapper = content?.querySelector('.sub-item-wrapper');
+      if (drawer.parentElement !== swipe) swipe.append(drawer);
+      if (wrapper?.classList.contains('sub-store-a11y-drawer-inline')) wrapper.classList.remove('sub-store-a11y-drawer-inline');
       const existingPreviewProxy = swipe.querySelector('.sub-store-a11y-preview-proxy');
       existingPreviewProxy?.remove();
       if (preview) {
@@ -670,13 +675,6 @@
         delete preview.dataset.a11yPreviewTabindex;
       }
       if (expanded) {
-        if (drawer.classList.contains('sub-store-a11y-drawer-collapsed')) {
-          drawer.classList.remove('sub-store-a11y-drawer-collapsed');
-        }
-        if (preview && drawer.nextElementSibling !== preview) preview.before(drawer);
-        if (wrapper && !wrapper.classList.contains('sub-store-a11y-drawer-inline')) {
-          wrapper.classList.add('sub-store-a11y-drawer-inline');
-        }
         if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
         if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
         originalActions.forEach((action) => {
@@ -689,13 +687,6 @@
           }
         });
       } else {
-        if (!drawer.classList.contains('sub-store-a11y-drawer-collapsed')) {
-          drawer.classList.add('sub-store-a11y-drawer-collapsed');
-        }
-        if (drawer.parentElement !== swipe) swipe.append(drawer);
-        if (wrapper?.classList.contains('sub-store-a11y-drawer-inline')) {
-          wrapper.classList.remove('sub-store-a11y-drawer-inline');
-        }
         if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
         if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
         originalActions.forEach((action) => {
