@@ -25,8 +25,7 @@ test('metadata matches arbitrary HTTP and HTTPS domains without privileged grant
   assert.match(source, /^\/\/ @name\s+Sub-Store\s*$/m);
   assert.match(source, /^\/\/ @author\s+xiaopan007\s*$/m);
   assert.match(source, /^\/\/ @homepageURL\s+https:\/\/github\.com\/xiaopan007\/zaxiang\s*$/m);
-  assert.match(source, /@match\s+http:\/\/\*\/\*/);
-  assert.match(source, /@match\s+https:\/\/\*\/\*/);
+  assert.match(source, /^\/\/ @match\s+\*:\/\/\*\/\*\s*$/m);
   assert.match(source, /@grant\s+none/);
   assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/xiaopan007\/zaxiang\/main\/sub-store\.user\.js\s*$/m);
   assert.match(source, /^\/\/ @downloadURL\s+https:\/\/raw\.githubusercontent\.com\/xiaopan007\/zaxiang\/main\/sub-store\.user\.js\s*$/m);
@@ -140,7 +139,7 @@ test('semantic repair labels icon controls and preserves author labels', async (
   assert.equal(document.querySelector('#mobile-layout').ariaLabel, '切换到移动布局');
   const nestedIcon = document.querySelector('#desktop-layout svg');
   assert.equal(nestedIcon.getAttribute('aria-hidden'), 'true');
-  assert.equal(nestedIcon.getAttribute('role'), null);
+  assert.equal(nestedIcon.getAttribute('role'), 'presentation');
   assert.equal(nestedIcon.getAttribute('tabindex'), '-1');
   assert.equal(document.querySelector('#export').ariaLabel, '导出订阅');
   assert.equal(document.querySelector('#kept').ariaLabel, '自定义名称');
@@ -318,8 +317,9 @@ test('bottom navigation and custom Sub-Store controls become keyboard accessible
   assert.equal(nav.ariaLabel, '主要导航');
   const navItems = document.querySelectorAll('.menu-item');
   assert.equal(navItems.length, 6);
-  assert.deepEqual(Array.from(navItems, (item) => item.getAttribute('role')), Array(6).fill('button'));
+  assert.deepEqual(Array.from(navItems, (item) => item.getAttribute('role')), Array(6).fill('link'));
   assert.deepEqual(Array.from(navItems, (item) => item.ariaLabel), ['订阅管理', '文件管理', '同步', '分享管理', '归档', '我的']);
+  assert.deepEqual(Array.from(navItems, (item) => item.title), ['订阅管理', '文件管理', '同步', '分享管理', '归档', '我的']);
   assert.deepEqual(Array.from(navItems, (item) => item.tabIndex), Array(6).fill(0));
   assert.deepEqual(Array.from(document.querySelectorAll('.menu-item i, .menu-item svg'), (icon) => icon.getAttribute('aria-hidden')), Array(6).fill('true'));
   assert.equal(active.getAttribute('aria-current'), 'page');
@@ -587,11 +587,15 @@ test('subscription swipe drawer is exposed only while its action drawer is open'
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
   assert.equal(drawer.getAttribute('aria-hidden'), 'true');
   assert.equal(drawer.hasAttribute('inert'), true);
+  assert.equal(drawer.classList.contains('sub-store-a11y-drawer-collapsed'), true);
+  assert.equal(dom.window.getComputedStyle(drawer).visibility, 'hidden');
   assert.equal(swipe.hasAttribute('aria-owns'), false);
   assert.equal(document.querySelector('.sub-store-a11y-drawer-actions'), null);
   assert.equal(document.querySelector('.sub-store-a11y-preview-proxy'), null);
   assert.equal(originalActions[1].getAttribute('href'), originalHref);
-  assert.deepEqual(Array.from(originalActions, (action) => action.hasAttribute('inert')), [false, false, false]);
+  assert.deepEqual(Array.from(originalActions, (action) => action.hasAttribute('inert')), [true, true, true]);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('aria-hidden')), ['true', 'true', 'true']);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('tabindex')), ['-1', '-1', '-1']);
 
   trigger.style.transform = 'rotate(180deg)';
   await tick();
@@ -599,12 +603,18 @@ test('subscription swipe drawer is exposed only while its action drawer is open'
   assert.equal(trigger.getAttribute('aria-expanded'), 'true');
   assert.equal(drawer.hasAttribute('aria-hidden'), false);
   assert.equal(drawer.hasAttribute('inert'), false);
+  assert.equal(drawer.classList.contains('sub-store-a11y-drawer-collapsed'), false);
+  assert.equal(Boolean(trigger.compareDocumentPosition(drawer) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), true);
+  assert.equal(Boolean(drawer.compareDocumentPosition(preview) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), true);
   assert.equal(swipe.hasAttribute('aria-owns'), false);
   assert.equal(document.querySelector('.sub-store-a11y-drawer-actions'), null);
   assert.deepEqual(Array.from(originalActions, (action) => action.ariaLabel), [
     '复制订阅配置', '导出订阅', '删除订阅'
   ]);
   assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('role')), ['button', null, 'button']);
+  assert.deepEqual(Array.from(originalActions, (action) => action.hasAttribute('inert')), [false, false, false]);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('aria-hidden')), [null, null, null]);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('tabindex')), ['0', null, '0']);
   assert.equal(originalActions[1].getAttribute('href'), originalHref);
   assert.equal(preview.hasAttribute('aria-hidden'), false);
   assert.equal(preview.getAttribute('tabindex'), '0');
@@ -631,6 +641,11 @@ test('subscription swipe drawer is exposed only while its action drawer is open'
   await tick();
   assert.equal(drawer.getAttribute('aria-hidden'), 'true');
   assert.equal(drawer.hasAttribute('inert'), true);
+  assert.equal(drawer.classList.contains('sub-store-a11y-drawer-collapsed'), true);
+  assert.equal(dom.window.getComputedStyle(drawer).visibility, 'hidden');
+  assert.deepEqual(Array.from(originalActions, (action) => action.hasAttribute('inert')), [true, true, true]);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('aria-hidden')), ['true', 'true', 'true']);
+  assert.deepEqual(Array.from(originalActions, (action) => action.getAttribute('tabindex')), ['-1', '-1', '-1']);
   assert.equal(swipe.hasAttribute('aria-owns'), false);
   assert.equal(swipe.querySelector('.sub-store-a11y-preview-proxy'), null);
   assert.equal(preview.getAttribute('tabindex'), '0');
@@ -695,6 +710,7 @@ test('icons inside named controls cannot become separate empty focus targets in 
   const icon = button.querySelector('svg');
   assert.equal(button.ariaLabel, '生成节点对比');
   assert.equal(icon.getAttribute('aria-hidden'), 'true');
+  assert.equal(icon.getAttribute('role'), 'presentation');
   assert.equal(icon.getAttribute('focusable'), 'false');
   assert.equal(icon.getAttribute('tabindex'), '-1');
   icon.setAttribute('aria-hidden', 'false');
