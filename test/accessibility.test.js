@@ -365,6 +365,31 @@ test('navigation repair does not rewrite an unchanged aria-hidden value', async 
   dom.window.close();
 });
 
+test('mobile NutUI tabbar items expose exact VoiceOver navigation names', async () => {
+  const dom = createPage(`<!doctype html><title>Sub Store</title>
+    <meta name="description" content="sub-converter"><div id="app">订阅 文件 同步 分享 归档 我的
+      <div class="nut-tabbar tabbar">
+        <div class="nut-tabbar-item tabbar-item" style="cursor:pointer"><view class="nut-tabbar-item_icon-box"><view><i class="nut-icon-link"></i></view><view class="nut-tabbar-item_icon-box_nav-word"></view></view></div>
+        <div class="nut-tabbar-item nut-tabbar-item__icon--unactive tabbar-item" style="cursor:pointer"><view class="nut-tabbar-item_icon-box"><view><i class="nut-icon-category"></i></view><view class="nut-tabbar-item_icon-box_nav-word"></view></view></div>
+        <div class="nut-tabbar-item nut-tabbar-item__icon--unactive tabbar-item" style="cursor:pointer"><view class="nut-tabbar-item_icon-box"><view><i class="nut-icon-refresh2"></i></view><view class="nut-tabbar-item_icon-box_nav-word"></view></view></div>
+        <div class="nut-tabbar-item nut-tabbar-item__icon--unactive tabbar-item" style="cursor:pointer"><view class="nut-tabbar-item_icon-box"><div><svg data-icon="share-nodes"></svg></div><view class="nut-tabbar-item_icon-box_nav-word"></view></view></div>
+        <div class="nut-tabbar-item nut-tabbar-item__icon--unactive tabbar-item" style="cursor:pointer"><view class="nut-tabbar-item_icon-box"><view><i class="nut-icon-setting"></i></view><view class="nut-tabbar-item_icon-box_nav-word"></view></view></div>
+      </div>
+    </div>`);
+  await tick();
+  const { document } = dom.window;
+  const items = document.querySelectorAll('.nut-tabbar-item');
+  assert.deepEqual(Array.from(items, (item) => item.getAttribute('role')), Array(5).fill('link'));
+  assert.deepEqual(Array.from(items, (item) => item.ariaLabel), ['订阅管理', '文件管理', '同步', '分享管理', '我的']);
+  assert.deepEqual(Array.from(items, (item) => item.title), ['订阅管理', '文件管理', '同步', '分享管理', '我的']);
+  assert.deepEqual(Array.from(items, (item) => item.tabIndex), Array(5).fill(0));
+  assert.equal(items[0].getAttribute('aria-current'), 'page');
+  assert.deepEqual(Array.from(items).slice(1).map((item) => item.getAttribute('aria-current')), Array(4).fill(null));
+  assert.deepEqual(Array.from(document.querySelectorAll('.nut-tabbar-item i, .nut-tabbar-item svg'), (icon) => icon.getAttribute('aria-hidden')), Array(5).fill('true'));
+  assert.equal(document.querySelectorAll('.nut-tabbar-item [role="button"], .nut-tabbar-item [tabindex="0"]').length, 0);
+  dom.window.close();
+});
+
 test('subscription more-actions control exposes its dynamic name and expansion state', async () => {
   const dom = createPage(`<!doctype html><title>Sub Store</title>
     <meta name="description" content="sub-converter"><div id="app">订阅 文件 同步 分享 归档 我的
