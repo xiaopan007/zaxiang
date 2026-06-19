@@ -25,7 +25,7 @@ test('metadata matches arbitrary HTTP and HTTPS domains without privileged grant
   const metadata = source.match(/^\/\/ ==UserScript==[\s\S]*?^\/\/ ==\/UserScript==/m)?.[0] || '';
   assert.match(source, /^\/\/ @name\s+Sub-Store\s*$/m);
   assert.match(source, /^\/\/ @namespace\s+sub-store-universal-a11y\s*$/m);
-  assert.match(source, /^\/\/ @version\s+1\.0\.26\s*$/m);
+  assert.match(source, /^\/\/ @version\s+1\.0\.27\s*$/m);
   assert.match(source, /^\/\/ @name:zh-CN\s+Sub-Store 通用无障碍增强\s*$/m);
   assert.match(source, /^\/\/ @name:en\s+Sub-Store Universal Accessibility\s*$/m);
   assert.match(source, /^\/\/ @author\s+xiaopan007\s*$/m);
@@ -34,8 +34,8 @@ test('metadata matches arbitrary HTTP and HTTPS domains without privileged grant
   assert.match(source, /^\/\/ @license\s+Copyright xiaopan007\s*$/m);
   assert.match(source, /^\/\/ @match\s+\*:\/\/\*\/\*\s*$/m);
   assert.match(source, /@grant\s+none/);
-  assert.match(source, /^\/\/ @updateURL\s+https:\/\/update\.greasyfork\.org\/scripts\/583436\/Sub-Store\.meta\.js\s*$/m);
-  assert.match(source, /^\/\/ @downloadURL\s+https:\/\/update\.greasyfork\.org\/scripts\/583436\/Sub-Store\.user\.js\s*$/m);
+  assert.match(source, /^\/\/ @updateURL\s+https:\/\/update\.greasyfork\.org\/scripts\/583440\/Sub-Store\.meta\.js\s*$/m);
+  assert.match(source, /^\/\/ @downloadURL\s+https:\/\/update\.greasyfork\.org\/scripts\/583440\/Sub-Store\.user\.js\s*$/m);
   assert.equal(metadata.includes('github.com'), false);
   assert.equal(metadata.includes('githubusercontent.com'), false);
   for (const browser of ['chrome', 'edge', 'safari']) {

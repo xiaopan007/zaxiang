@@ -3,14 +3,14 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.26
+// @version      1.0.27
 // @author       xiaopan007
 // @license      Copyright xiaopan007
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
-// @updateURL    https://update.greasyfork.org/scripts/583436/Sub-Store.meta.js
-// @downloadURL  https://update.greasyfork.org/scripts/583436/Sub-Store.user.js
+// @updateURL    https://update.greasyfork.org/scripts/583440/Sub-Store.meta.js
+// @downloadURL  https://update.greasyfork.org/scripts/583440/Sub-Store.user.js
 // @match        *://*/*
 // @compatible   chrome
 // @compatible   edge
