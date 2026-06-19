@@ -1,14 +1,13 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.20
+// @version      1.0.23
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @updateURL    https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
 // @downloadURL  https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
-// @match        http://*/*
-// @match        https://*/*
+// @match        *://*/*
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -170,6 +169,7 @@
       [data-sub-store-a11y="active"] select,
       [data-sub-store-a11y="active"] textarea,
       [data-sub-store-a11y="active"] [role="button"],
+      [data-sub-store-a11y="active"] [role="link"],
       [data-sub-store-a11y="active"] [role="switch"],
       [data-sub-store-a11y="active"] [role="checkbox"],
       [data-sub-store-a11y="active"] [role="radio"] { min-height: 44px; }
@@ -184,6 +184,8 @@
         [data-sub-store-a11y="active"] :focus-visible { outline-color: Highlight !important; }
         .sub-store-a11y-skip-link { color: LinkText; background: Canvas; }
       }
+      .sub-store-a11y-drawer-inline { overflow: visible !important; }
+      .sub-store-a11y-drawer-collapsed { visibility: hidden !important; }
     `;
     (document.head || document.documentElement).append(style);
   }
@@ -378,14 +380,14 @@
   }
 
   function labelControls(root) {
-    root.querySelectorAll('button, a[href], [role="button"]').forEach((element) => {
+    root.querySelectorAll('button, a[href], [role="button"], [role="link"]').forEach((element) => {
       if (hasAccessibleName(element)) return;
       element.setAttribute('aria-label', inferredLabel(element) || (element.matches('a[href]') ? '打开链接' : '操作按钮'));
       element.dataset.a11yGeneratedLabel = 'true';
     });
-    root.querySelectorAll('button svg, button i, a[href] svg, a[href] i, [role="button"] svg, [role="button"] i').forEach((icon) => {
-      if (icon.getAttribute('role') === 'button' || icon.getAttribute('role') === 'link') icon.removeAttribute('role');
+    root.querySelectorAll('button svg, button i, a[href] svg, a[href] i, [role="button"] svg, [role="button"] i, [role="link"] svg, [role="link"] i').forEach((icon) => {
       if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
+      if (icon.getAttribute('role') !== 'presentation') icon.setAttribute('role', 'presentation');
       if (icon.getAttribute('focusable') !== 'false') icon.setAttribute('focusable', 'false');
       if (icon.getAttribute('tabindex') !== '-1') icon.setAttribute('tabindex', '-1');
     });
@@ -524,7 +526,9 @@
     });
     root.querySelectorAll('.menu-item').forEach((item) => {
       const text = visibleText(item);
-      makeKeyboardControl(item, 'button', NAVIGATION_LABELS[text] || text);
+      const label = NAVIGATION_LABELS[text] || text;
+      makeKeyboardControl(item, 'link', label);
+      if (label && item.getAttribute('title') !== label) item.setAttribute('title', label);
       item.querySelectorAll('i, svg').forEach((icon) => {
         if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
       });
@@ -622,13 +626,11 @@
           delete action.dataset.a11yOriginalHref;
         }
         if (action.getAttribute('role') === 'none') action.removeAttribute('role');
-        if (action.getAttribute('aria-hidden') === 'true') action.removeAttribute('aria-hidden');
-        if (action.getAttribute('tabindex') === '-1') action.removeAttribute('tabindex');
-        if (action.hasAttribute('inert')) action.removeAttribute('inert');
       });
       swipe.querySelectorAll('.sub-store-a11y-drawer-actions').forEach((legacyProxy) => legacyProxy.remove());
       if (drawer.classList.contains('sub-store-a11y-drawer-hidden')) drawer.classList.remove('sub-store-a11y-drawer-hidden');
       const preview = content?.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
+      const wrapper = content?.querySelector('.sub-item-wrapper');
       const existingPreviewProxy = swipe.querySelector('.sub-store-a11y-preview-proxy');
       existingPreviewProxy?.remove();
       if (preview) {
@@ -640,11 +642,39 @@
         delete preview.dataset.a11yPreviewTabindex;
       }
       if (expanded) {
+        if (drawer.classList.contains('sub-store-a11y-drawer-collapsed')) {
+          drawer.classList.remove('sub-store-a11y-drawer-collapsed');
+        }
+        if (preview && drawer.nextElementSibling !== preview) preview.before(drawer);
+        if (wrapper && !wrapper.classList.contains('sub-store-a11y-drawer-inline')) {
+          wrapper.classList.add('sub-store-a11y-drawer-inline');
+        }
         if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
         if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
+        originalActions.forEach((action) => {
+          action.removeAttribute('aria-hidden');
+          action.removeAttribute('inert');
+          if (action.matches('a[href], button')) {
+            if (action.getAttribute('tabindex') === '-1') action.removeAttribute('tabindex');
+          } else if (action.getAttribute('tabindex') !== '0') {
+            action.setAttribute('tabindex', '0');
+          }
+        });
       } else {
+        if (!drawer.classList.contains('sub-store-a11y-drawer-collapsed')) {
+          drawer.classList.add('sub-store-a11y-drawer-collapsed');
+        }
+        if (drawer.parentElement !== swipe) swipe.append(drawer);
+        if (wrapper?.classList.contains('sub-store-a11y-drawer-inline')) {
+          wrapper.classList.remove('sub-store-a11y-drawer-inline');
+        }
         if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
         if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
+        originalActions.forEach((action) => {
+          if (action.getAttribute('aria-hidden') !== 'true') action.setAttribute('aria-hidden', 'true');
+          if (!action.hasAttribute('inert')) action.setAttribute('inert', '');
+          if (action.getAttribute('tabindex') !== '-1') action.setAttribute('tabindex', '-1');
+        });
       }
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
