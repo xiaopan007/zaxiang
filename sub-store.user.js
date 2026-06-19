@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.23
+// @version      1.0.24
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -95,6 +95,14 @@
     归档: '归档',
     我的: '我的'
   };
+
+  const MOBILE_NAVIGATION_LABELS = [
+    ['.nut-icon-link', '订阅管理'],
+    ['.nut-icon-category', '文件管理'],
+    ['.nut-icon-refresh2', '同步'],
+    ['svg[data-icon="share-nodes"]', '分享管理'],
+    ['.nut-icon-setting', '我的']
+  ];
 
   function isSubStore() {
     let score = 0;
@@ -534,6 +542,21 @@
       });
       if (item.classList.contains('active')) item.setAttribute('aria-current', 'page');
       else item.removeAttribute('aria-current');
+    });
+    root.querySelectorAll('.nut-tabbar-item, .tabbar-item').forEach((item) => {
+      const match = MOBILE_NAVIGATION_LABELS.find(([selector]) => item.querySelector(selector));
+      if (!match) return;
+      const label = match[1];
+      makeKeyboardControl(item, 'link', label);
+      if (item.getAttribute('title') !== label) item.setAttribute('title', label);
+      item.querySelectorAll('i, svg').forEach((icon) => {
+        if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
+        if (icon.getAttribute('role') !== 'presentation') icon.setAttribute('role', 'presentation');
+        if (icon.getAttribute('focusable') !== 'false') icon.setAttribute('focusable', 'false');
+        if (icon.getAttribute('tabindex') !== '-1') icon.setAttribute('tabindex', '-1');
+      });
+      if (item.classList.contains('nut-tabbar-item__icon--unactive')) item.removeAttribute('aria-current');
+      else item.setAttribute('aria-current', 'page');
     });
     root.querySelectorAll('.tag').forEach((tag) => {
       tag.setAttribute('role', 'button');
