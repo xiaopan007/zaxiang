@@ -3,16 +3,14 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.25
+// @version      1.0.26
 // @author       xiaopan007
-// @homepageURL  https://github.com/xiaopan007/zaxiang
-// @supportURL   https://github.com/xiaopan007/zaxiang/issues
 // @license      Copyright xiaopan007
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
-// @updateURL    https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
-// @downloadURL  https://raw.githubusercontent.com/xiaopan007/zaxiang/main/sub-store.user.js
+// @updateURL    https://update.greasyfork.org/scripts/583436/Sub-Store.meta.js
+// @downloadURL  https://update.greasyfork.org/scripts/583436/Sub-Store.user.js
 // @match        *://*/*
 // @compatible   chrome
 // @compatible   edge
