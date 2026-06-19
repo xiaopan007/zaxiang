@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Sub-Store
 // @namespace    sub-store-universal-a11y
-// @version      1.0.14
+// @version      1.0.20
 // @author       xiaopan007
 // @homepageURL  https://github.com/xiaopan007/zaxiang
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
@@ -32,9 +32,7 @@
     ['nut-popup__close-icon', '关闭'],
     ['include-subs-trigger', '选择手动订阅'],
     ['failure-mode-trigger', '选择订阅失败处理方式'],
-    ['nut-drag', '拖动排序'],
-    ['refresh-sub-flow', '编辑订阅'],
-    ['copy-sub-link', '复制订阅链接']
+    ['nut-drag', '拖动排序']
   ];
 
   const ICON_LABELS = {
@@ -71,7 +69,8 @@
     'file-lines': '查看记录',
     'floppy-disk': '保存',
     language: '切换语言',
-    desktop: '切换桌面布局',
+    desktop: '切换到桌面布局',
+    'mobile-screen-button': '切换到移动布局',
     'table-columns': '切换分栏布局',
     eye: '显示',
     'eye-slash': '隐藏',
@@ -136,6 +135,7 @@
   function installInfrastructure() {
     installStyles();
     ensureSkipLink();
+    document.addEventListener('keydown', routeSubscriptionDrawerFocus);
     document.addEventListener('keydown', handleCustomControlKey);
     document.addEventListener('focusin', redirectNestedIconFocus, true);
     window.addEventListener('popstate', handleRouteChange);
@@ -209,6 +209,58 @@
     queueMicrotask(queueEnhancement);
   }
 
+  function routeSubscriptionDrawerFocus(event) {
+    if (event.key !== 'Tab' || !(event.target instanceof Element)) return;
+    const swipe = event.target.closest('.nut-swipe');
+    if (!swipe) return;
+    const trigger = swipe.querySelector('button:has(svg[data-icon="angles-right"])');
+    if (trigger?.getAttribute('aria-expanded') !== 'true') return;
+    const drawer = swipe.querySelector('.nut-swipe__right');
+    const preview = swipe.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
+    const actions = Array.from(drawer?.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn') || [])
+      .map((wrapper) => wrapper.querySelector('a[href], button, .nut-button'))
+      .filter(Boolean);
+    const firstAction = actions[0];
+    const lastAction = actions[actions.length - 1];
+    if (!event.shiftKey && event.target === lastAction && preview) {
+      event.preventDefault();
+      trigger.click();
+      const content = swipe.querySelector('.nut-swipe__content');
+      const focusPreviewWhenCollapsed = (remainingFrames) => {
+        const contentTransform = content ? (getComputedStyle(content).transform || content.style.transform) : '';
+        const matrix = contentTransform.match(/^matrix(?:3d)?\((.+)\)$/);
+        const values = matrix ? matrix[1].split(',').map(Number) : [];
+        const horizontalOffset = values.length === 6 ? values[4] : values.length === 16 ? values[12] : NaN;
+        const contentIsCollapsed = !contentTransform
+          || contentTransform === 'none'
+          || (Number.isFinite(horizontalOffset) && Math.abs(horizontalOffset) < 0.5);
+        if (!/rotate\(180deg\)/.test(trigger.style.transform) && contentIsCollapsed) {
+          preview.focus();
+          return;
+        }
+        if (remainingFrames > 0) requestAnimationFrame(() => focusPreviewWhenCollapsed(remainingFrames - 1));
+      };
+      requestAnimationFrame(() => focusPreviewWhenCollapsed(40));
+      return;
+    }
+    let destination = null;
+    if (!event.shiftKey && event.target === trigger) destination = firstAction;
+    else if (event.shiftKey && event.target === preview) destination = lastAction;
+    else if (event.shiftKey && event.target === firstAction) destination = trigger;
+    else if (!event.shiftKey && event.target === preview) {
+      destination = Array.from(document.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"], [role="button"]'))
+        .find((candidate) => !swipe.contains(candidate)
+          && Boolean(swipe.compareDocumentPosition(candidate) & Node.DOCUMENT_POSITION_FOLLOWING)
+          && !candidate.closest('[inert], [aria-hidden="true"]')
+          && !candidate.matches('[disabled], [tabindex="-1"]')
+          && getComputedStyle(candidate).display !== 'none'
+          && getComputedStyle(candidate).visibility !== 'hidden');
+    }
+    if (!destination) return;
+    event.preventDefault();
+    destination.focus();
+  }
+
   function handleCustomControlKey(event) {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     const control = event.target.closest('[data-clickable], [role="button"], [role="switch"], [role="checkbox"], [role="radio"], [role="link"]');
@@ -227,11 +279,23 @@
   function hasAccessibleName(element) {
     if (cleanText(element.getAttribute('aria-label')) || cleanText(element.getAttribute('aria-labelledby'))) return true;
     if ((element.getAttribute('title') || '').trim()) return true;
-    if ((element.textContent || '').trim()) return true;
+    const textClone = element.cloneNode(true);
+    textClone.querySelectorAll('svg, i').forEach((icon) => icon.remove());
+    if (cleanText(textClone.textContent || '')) return true;
     return Boolean(element.querySelector('img[alt]:not([alt=""])'));
   }
 
   function inferredLabel(element) {
+    const shareActions = element.closest('.link-item-actions');
+    if (shareActions) {
+      if (element.querySelector('svg[data-icon="link"]')) return '编辑来源项目';
+      if (element.querySelector('svg[data-icon="clone"]')) return '复制分享配置';
+      if (element.querySelector('svg[data-icon="pen-nib"]')) return '编辑分享';
+      if (element.querySelector('svg[data-icon="trash-can"], svg[data-icon="trash"]')) return '删除分享';
+    }
+    if (element.closest('.sub-item-menu')
+      && element.classList.contains('public-link-action')
+      && element.querySelector('svg[data-icon="share-nodes"]')) return '编辑分享';
     if (element.classList.contains('upload-all-btn')) {
       if (element.querySelector('svg[data-icon="cloud-arrow-up"]')) return '上传全部同步配置';
       if (element.querySelector('svg[data-icon="cloud-arrow-down"]')) return '下载同步配置';
@@ -277,10 +341,19 @@
     return cleanText(element.innerText || element.textContent || '');
   }
 
+  function isVisuallyHidden(element) {
+    for (let current = element; current && current !== document.documentElement; current = current.parentElement) {
+      if (current.hidden || current.getAttribute('aria-hidden') === 'true') return true;
+      const style = getComputedStyle(current);
+      if (style.display === 'none' || style.visibility === 'hidden') return true;
+    }
+    return false;
+  }
+
   function contextLabel(element) {
     const container = element.closest('.nut-cell, .nut-form-item, .switch-item, .line, .editor-tab-content');
     if (!container) return '';
-    const candidates = container.querySelectorAll('.nut-form-item__label, .label-with-tip, .field-label, label');
+    const candidates = container.querySelectorAll('.nut-form-item__label, .nut-cell__title, .label-with-tip, .field-label, label');
     for (const candidate of candidates) {
       if (candidate === element || element.contains(candidate)) continue;
       const text = visibleText(candidate);
@@ -311,6 +384,7 @@
       element.dataset.a11yGeneratedLabel = 'true';
     });
     root.querySelectorAll('button svg, button i, a[href] svg, a[href] i, [role="button"] svg, [role="button"] i').forEach((icon) => {
+      if (icon.getAttribute('role') === 'button' || icon.getAttribute('role') === 'link') icon.removeAttribute('role');
       if (icon.getAttribute('aria-hidden') !== 'true') icon.setAttribute('aria-hidden', 'true');
       if (icon.getAttribute('focusable') !== 'false') icon.setAttribute('focusable', 'false');
       if (icon.getAttribute('tabindex') !== '-1') icon.setAttribute('tabindex', '-1');
@@ -363,12 +437,16 @@
   }
 
   function repairOverlays(root) {
-    if (activeDialog && !activeDialog.isConnected) {
+    if (activeDialog && (!activeDialog.isConnected || isVisuallyHidden(activeDialog))) {
       if (dialogReturnTarget?.isConnected) dialogReturnTarget.focus();
+      seenDialogs.delete(activeDialog);
       activeDialog = null;
       dialogReturnTarget = null;
     }
     root.querySelectorAll('.nut-popup, .nut-dialog, [role="dialog"]').forEach((dialog) => {
+      if (isVisuallyHidden(dialog)) return;
+      if (dialog.classList.contains('nut-popup')
+        && Array.from(dialog.querySelectorAll('.nut-dialog')).some((inner) => !isVisuallyHidden(inner))) return;
       if (!dialog.hasAttribute('role')) dialog.setAttribute('role', 'dialog');
       dialog.setAttribute('aria-modal', 'true');
       if (!dialog.hasAttribute('aria-label') && !dialog.hasAttribute('aria-labelledby')) {
@@ -380,13 +458,13 @@
           dialog.setAttribute('aria-label', '对话框');
         }
       }
-      if (!seenDialogs.has(dialog) && !dialog.hidden && dialog.getAttribute('aria-hidden') !== 'true') {
+      if (!seenDialogs.has(dialog)) {
         seenDialogs.add(dialog);
         dialogReturnTarget = document.activeElement && document.activeElement !== document.body
           ? document.activeElement
           : null;
         activeDialog = dialog;
-        const focusTarget = dialog.querySelector('button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const focusTarget = dialog.querySelector('button, a[href], input, select, textarea, [role="button"], [tabindex]:not([tabindex="-1"])');
         if (focusTarget) focusTarget.focus();
         else {
           dialog.tabIndex = -1;
@@ -467,6 +545,7 @@
     });
     root.querySelectorAll('.nut-button, .nut-popup__close-icon').forEach((control) => {
       if (control.closest('button, a[href]')) return;
+      if (control.closest('.nut-swipe__left, .nut-swipe__right')) return;
       makeKeyboardControl(control, 'button');
     });
     root.querySelectorAll('.sub-item-menu').forEach((group) => {
@@ -485,10 +564,12 @@
       drawer.setAttribute('role', 'group');
       drawer.setAttribute('aria-label', `${objectName}快捷操作`);
       drawer.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn').forEach((wrapper) => {
-        const control = wrapper.querySelector('a[href], button, .nut-button');
+        const control = wrapper.querySelector('a, button, .nut-button');
         if (!control) return;
-        control.setAttribute('role', 'button');
-        if (!control.hasAttribute('tabindex')) control.tabIndex = 0;
+        if (!control.matches('a[href], button')) {
+          control.setAttribute('role', 'button');
+          if (!control.hasAttribute('tabindex')) control.tabIndex = 0;
+        }
         if (control.querySelector('svg[data-icon="paste"]')) setControlLabel(control, `复制${objectName}配置`);
         if (control.querySelector('svg[data-icon="file-export"]')) setControlLabel(control, `导出${objectName}`);
         if (control.querySelector('svg[data-icon="trash-can"], svg[data-icon="trash"]')) setControlLabel(control, `删除${objectName}`);
@@ -516,35 +597,54 @@
       }
       if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
-      control.removeAttribute('aria-expanded');
+      control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
     });
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = /rotate\(180deg\)/.test(control.style.transform);
-      control.removeAttribute('aria-expanded');
+      control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '收起复制、导出和删除操作' : '展开复制、导出和删除操作');
       const swipe = control.closest('.nut-swipe');
       const drawer = swipe?.querySelector('.nut-swipe__right');
       const content = swipe?.querySelector('.nut-swipe__content');
       if (!drawer) return;
+      if (swipe?.dataset.a11yGeneratedOwns === 'true') {
+        swipe.removeAttribute('aria-owns');
+        delete swipe.dataset.a11yGeneratedOwns;
+      }
+      const originalActions = Array.from(drawer.querySelectorAll('.sub-item-swipe-btn-wrapper, .sub-item-swipe-btn'))
+        .map((wrapper) => wrapper.querySelector('a, button, .nut-button'))
+        .filter(Boolean);
+      originalActions.forEach((action) => {
+        if (action.dataset.a11yOriginalHref) {
+          const originalHref = action.dataset.a11yOriginalHref;
+          action.setAttribute('href', originalHref);
+          delete action.dataset.a11yOriginalHref;
+        }
+        if (action.getAttribute('role') === 'none') action.removeAttribute('role');
+        if (action.getAttribute('aria-hidden') === 'true') action.removeAttribute('aria-hidden');
+        if (action.getAttribute('tabindex') === '-1') action.removeAttribute('tabindex');
+        if (action.hasAttribute('inert')) action.removeAttribute('inert');
+      });
+      swipe.querySelectorAll('.sub-store-a11y-drawer-actions').forEach((legacyProxy) => legacyProxy.remove());
+      if (drawer.classList.contains('sub-store-a11y-drawer-hidden')) drawer.classList.remove('sub-store-a11y-drawer-hidden');
+      const preview = content?.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
+      const existingPreviewProxy = swipe.querySelector('.sub-store-a11y-preview-proxy');
+      existingPreviewProxy?.remove();
+      if (preview) {
+        if (preview.classList.contains('sub-store-a11y-proxy-focus')) preview.classList.remove('sub-store-a11y-proxy-focus');
+        if (preview.getAttribute('aria-hidden') === 'true') preview.removeAttribute('aria-hidden');
+        const originalTabindex = preview.dataset.a11yPreviewTabindex;
+        if (originalTabindex === '__none__') preview.removeAttribute('tabindex');
+        else if (originalTabindex !== undefined) preview.setAttribute('tabindex', originalTabindex);
+        delete preview.dataset.a11yPreviewTabindex;
+      }
       if (expanded) {
         if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
         if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
-        if (content) {
-          if (!drawer.id) drawer.id = `sub-store-a11y-drawer-${++generatedId}`;
-          if (!content.id) content.id = `sub-store-a11y-content-${++generatedId}`;
-          if (!swipe.hasAttribute('aria-owns') || swipe.dataset.a11yGeneratedOwns === 'true') {
-            swipe.setAttribute('aria-owns', `${drawer.id} ${content.id}`);
-            swipe.dataset.a11yGeneratedOwns = 'true';
-          }
-        }
       } else {
         if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
         if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
-        if (swipe?.dataset.a11yGeneratedOwns === 'true') {
-          swipe.removeAttribute('aria-owns');
-          delete swipe.dataset.a11yGeneratedOwns;
-        }
       }
     });
     root.querySelectorAll('.cm-img-button button').forEach((control) => {
@@ -606,6 +706,7 @@
 
   function repairPointerControls(root) {
     root.querySelectorAll('view[class], div[class], span[class], p[class], svg[class], svg[data-icon], i[class]').forEach((control) => {
+      if (control.closest('.nut-swipe__left, .nut-swipe__right')) return;
       const interactive = 'button, a[href], input, select, textarea, [role="button"], [role="link"], [role="switch"], [role="checkbox"], [role="radio"]';
       if (control.matches(interactive)) return;
       if (control.closest(interactive)) return;
@@ -622,8 +723,8 @@
     repairLandmarks(root);
     repairCollections(root);
     repairImages(root);
-    repairOverlays(root);
     repairCustomControls(root);
+    repairOverlays(root);
     labelForms(root);
     labelControls(root);
     ensureSkipLink();

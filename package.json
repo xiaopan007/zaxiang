@@ -1,0 +1,12 @@
+{
+  "name": "sub-store-universal-accessibility",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}
