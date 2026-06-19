@@ -23,12 +23,23 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 30));
 test('metadata matches arbitrary HTTP and HTTPS domains without privileged grants', () => {
   const source = readFileSync(scriptPath, 'utf8');
   assert.match(source, /^\/\/ @name\s+Sub-Store\s*$/m);
+  assert.match(source, /^\/\/ @namespace\s+sub-store-universal-a11y\s*$/m);
+  assert.match(source, /^\/\/ @version\s+1\.0\.25\s*$/m);
+  assert.match(source, /^\/\/ @name:zh-CN\s+Sub-Store 通用无障碍增强\s*$/m);
+  assert.match(source, /^\/\/ @name:en\s+Sub-Store Universal Accessibility\s*$/m);
   assert.match(source, /^\/\/ @author\s+xiaopan007\s*$/m);
   assert.match(source, /^\/\/ @homepageURL\s+https:\/\/github\.com\/xiaopan007\/zaxiang\s*$/m);
+  assert.match(source, /^\/\/ @description:zh-CN\s+为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。\s*$/m);
+  assert.match(source, /^\/\/ @description:en\s+Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials\.\s*$/m);
+  assert.match(source, /^\/\/ @license\s+Copyright xiaopan007\s*$/m);
+  assert.match(source, /^\/\/ @supportURL\s+https:\/\/github\.com\/xiaopan007\/zaxiang\/issues\s*$/m);
   assert.match(source, /^\/\/ @match\s+\*:\/\/\*\/\*\s*$/m);
   assert.match(source, /@grant\s+none/);
   assert.match(source, /^\/\/ @updateURL\s+https:\/\/raw\.githubusercontent\.com\/xiaopan007\/zaxiang\/main\/sub-store\.user\.js\s*$/m);
   assert.match(source, /^\/\/ @downloadURL\s+https:\/\/raw\.githubusercontent\.com\/xiaopan007\/zaxiang\/main\/sub-store\.user\.js\s*$/m);
+  for (const browser of ['chrome', 'edge', 'safari']) {
+    assert.match(source, new RegExp(`^// @compatible\\s+${browser}\\s*$`, 'm'));
+  }
 });
 
 test('artifact contains no credential, fixed service domain, network, storage, or clipboard access', () => {
