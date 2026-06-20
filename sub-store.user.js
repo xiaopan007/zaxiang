@@ -3,7 +3,7 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.31
+// @version      1.0.32
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
@@ -21,6 +21,11 @@
   'use strict';
 
   const ROOT_MARKER = 'subStoreA11y';
+  const CURRENT_VERSION = '1.0.32';
+  const UPDATE_META_URL = 'https://update.greasyfork.org/scripts/583440/Sub-Store.meta.js';
+  const UPDATE_DOWNLOAD_URL = 'https://update.greasyfork.org/scripts/583440/Sub-Store.user.js';
+  const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
+  const UPDATE_STORAGE_PREFIX = 'subStoreA11y.update.';
   let startupObserver;
   let enhancementObserver;
   let detectionQueued = false;
@@ -109,6 +114,106 @@
     ['.nut-icon-setting', '我的']
   ];
 
+  function parsePublishedVersion(metaText) {
+    const match = String(metaText).match(/^\s*\/\/\s*@version\s+(\d+(?:\.\d+)*)\s*$/m);
+    return match ? match[1] : null;
+  }
+
+  function compareVersions(left, right) {
+    const pattern = /^\d+(?:\.\d+)*$/;
+    if (!pattern.test(left) || !pattern.test(right)) return null;
+    const leftParts = left.split('.').map(Number);
+    const rightParts = right.split('.').map(Number);
+    const length = Math.max(leftParts.length, rightParts.length);
+    for (let index = 0; index < length; index += 1) {
+      const difference = (leftParts[index] || 0) - (rightParts[index] || 0);
+      if (difference) return difference > 0 ? 1 : -1;
+    }
+    return 0;
+  }
+
+  async function findAvailableUpdate(options) {
+    const {
+      fetchMeta, readValue, writeValue, currentVersion, now, interval
+    } = options;
+    const lastCheckedAt = Number(readValue('lastCheckedAt')) || 0;
+    if (now - lastCheckedAt < interval) return null;
+    writeValue('lastCheckedAt', String(now));
+    try {
+      const publishedVersion = parsePublishedVersion(await fetchMeta());
+      if (!publishedVersion || compareVersions(publishedVersion, currentVersion) !== 1) return null;
+      if (readValue('dismissedVersion') === publishedVersion) return null;
+      return publishedVersion;
+    } catch {
+      return null;
+    }
+  }
+
+  function readUpdateValue(key) {
+    try {
+      return localStorage.getItem(`${UPDATE_STORAGE_PREFIX}${key}`);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeUpdateValue(key, value) {
+    try {
+      localStorage.setItem(`${UPDATE_STORAGE_PREFIX}${key}`, value);
+    } catch {
+      // Storage may be unavailable in private or restricted browsing contexts.
+    }
+  }
+
+  async function checkForUpdate() {
+    const version = await findAvailableUpdate({
+      fetchMeta: async () => {
+        const response = await fetch(UPDATE_META_URL, {
+          cache: 'no-store',
+          credentials: 'omit',
+          referrerPolicy: 'no-referrer'
+        });
+        if (!response.ok) throw new Error('Update metadata unavailable');
+        return response.text();
+      },
+      readValue: readUpdateValue,
+      writeValue: writeUpdateValue,
+      currentVersion: CURRENT_VERSION,
+      now: Date.now(),
+      interval: UPDATE_CHECK_INTERVAL
+    });
+    if (version) showUpdateNotice(version);
+  }
+
+  function showUpdateNotice(version) {
+    if (!document.body || document.querySelector('#sub-store-a11y-update-notice')) return;
+    const notice = document.createElement('section');
+    notice.id = 'sub-store-a11y-update-notice';
+    notice.className = 'sub-store-a11y-update-notice';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+
+    const message = document.createElement('span');
+    message.textContent = `Sub-Store 无障碍增强 ${version} 已发布。`;
+
+    const updateLink = document.createElement('a');
+    updateLink.href = UPDATE_DOWNLOAD_URL;
+    updateLink.target = '_blank';
+    updateLink.rel = 'noopener noreferrer';
+    updateLink.textContent = '立即更新';
+
+    const dismissButton = document.createElement('button');
+    dismissButton.type = 'button';
+    dismissButton.textContent = '稍后';
+    dismissButton.addEventListener('click', () => {
+      writeUpdateValue('dismissedVersion', version);
+      notice.remove();
+    });
+
+    notice.append(message, updateLink, dismissButton);
+    document.body.prepend(notice);
+  }
+
   function isSubStore() {
     let score = 0;
     const title = document.title.trim().toLowerCase();
@@ -135,6 +240,7 @@
     startupObserver?.disconnect();
     enhance(document);
     installInfrastructure();
+    void checkForUpdate();
     enhancementObserver = new MutationObserver(queueEnhancement);
     enhancementObserver.observe(document.documentElement, {
       childList: true,
@@ -173,6 +279,19 @@
         border-radius: 6px; transform: translateY(-160%);
       }
       .sub-store-a11y-skip-link:focus { transform: translateY(0); }
+      .sub-store-a11y-update-notice {
+        position: fixed; z-index: 2147483646; inset-block-start: 12px; inset-inline: 12px;
+        display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+        width: fit-content; max-width: calc(100% - 24px); margin-inline: auto; padding: 10px 14px;
+        color: #fff; background: #3f2a78; border: 1px solid currentColor; border-radius: 8px;
+        box-shadow: 0 4px 16px rgb(0 0 0 / 24%); font-size: 14px; line-height: 1.5;
+      }
+      .sub-store-a11y-update-notice a,
+      .sub-store-a11y-update-notice button {
+        min-height: 36px !important; padding: 6px 10px; color: #fff; background: transparent;
+        border: 1px solid currentColor; border-radius: 6px; font: inherit; cursor: pointer;
+      }
+      .sub-store-a11y-update-notice a { display: inline-flex; align-items: center; text-decoration: underline; }
       [data-sub-store-a11y="active"] :focus-visible {
         outline: 3px solid #005fcc !important; outline-offset: 3px !important;
       }
@@ -195,7 +314,7 @@
       }
       @media (forced-colors: active) {
         [data-sub-store-a11y="active"] :focus-visible { outline-color: Highlight !important; }
-        .sub-store-a11y-skip-link { color: LinkText; background: Canvas; }
+        .sub-store-a11y-skip-link, .sub-store-a11y-update-notice { color: LinkText; background: Canvas; }
       }
       .sub-store-a11y-drawer-inline { overflow: visible !important; }
     `;
