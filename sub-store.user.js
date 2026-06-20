@@ -3,7 +3,7 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.32
+// @version      1.0.33
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
@@ -21,7 +21,7 @@
   'use strict';
 
   const ROOT_MARKER = 'subStoreA11y';
-  const CURRENT_VERSION = '1.0.32';
+  const CURRENT_VERSION = '1.0.33';
   const UPDATE_META_URL = 'https://update.greasyfork.org/scripts/583440/Sub-Store.meta.js';
   const UPDATE_DOWNLOAD_URL = 'https://update.greasyfork.org/scripts/583440/Sub-Store.user.js';
   const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
@@ -758,7 +758,7 @@
     });
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = isSubscriptionDrawerExpanded(control);
-      control.removeAttribute('aria-expanded');
+      control.setAttribute('aria-expanded', String(expanded));
       setControlLabel(control, expanded ? '隐藏复制、导出和删除操作' : '显示复制、导出和删除操作');
       const swipe = control.closest('.nut-swipe');
       const drawer = swipe?.querySelector('.nut-swipe__right');
