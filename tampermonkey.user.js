@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Tampermonkey
 // @namespace    https://www.tampermonkey.net/
-// @version      1.0.1
+// @version      1.0.2
 // @description  改善篡改猴管理界面的屏幕阅读器、键盘、焦点、触控与脚本删除体验。
 // @updateURL    https://update.greasyfork.org/scripts/583655/Tampermonkey.meta.js
 // @downloadURL  https://update.greasyfork.org/scripts/583655/Tampermonkey.user.js
