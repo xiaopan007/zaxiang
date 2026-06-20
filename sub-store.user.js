@@ -3,7 +3,7 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.29
+// @version      1.0.30
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
@@ -197,6 +197,7 @@
         [data-sub-store-a11y="active"] :focus-visible { outline-color: Highlight !important; }
         .sub-store-a11y-skip-link { color: LinkText; background: Canvas; }
       }
+      .sub-store-a11y-drawer-inline { overflow: visible !important; }
     `;
     (document.head || document.documentElement).append(style);
   }
@@ -662,8 +663,6 @@
       if (drawer.classList.contains('sub-store-a11y-drawer-collapsed')) drawer.classList.remove('sub-store-a11y-drawer-collapsed');
       const preview = content?.querySelector('.sub-item-detail, .sub-item-detail-isSimple');
       const wrapper = content?.querySelector('.sub-item-wrapper');
-      if (drawer.parentElement !== swipe) swipe.append(drawer);
-      if (wrapper?.classList.contains('sub-store-a11y-drawer-inline')) wrapper.classList.remove('sub-store-a11y-drawer-inline');
       const existingPreviewProxy = swipe.querySelector('.sub-store-a11y-preview-proxy');
       existingPreviewProxy?.remove();
       if (preview) {
@@ -675,6 +674,10 @@
         delete preview.dataset.a11yPreviewTabindex;
       }
       if (expanded) {
+        if (preview && drawer.nextElementSibling !== preview) preview.before(drawer);
+        if (wrapper && !wrapper.classList.contains('sub-store-a11y-drawer-inline')) {
+          wrapper.classList.add('sub-store-a11y-drawer-inline');
+        }
         if (drawer.hasAttribute('aria-hidden')) drawer.removeAttribute('aria-hidden');
         if (drawer.hasAttribute('inert')) drawer.removeAttribute('inert');
         originalActions.forEach((action) => {
@@ -687,6 +690,10 @@
           }
         });
       } else {
+        if (drawer.parentElement !== swipe) swipe.append(drawer);
+        if (wrapper?.classList.contains('sub-store-a11y-drawer-inline')) {
+          wrapper.classList.remove('sub-store-a11y-drawer-inline');
+        }
         if (drawer.getAttribute('aria-hidden') !== 'true') drawer.setAttribute('aria-hidden', 'true');
         if (!drawer.hasAttribute('inert')) drawer.setAttribute('inert', '');
         originalActions.forEach((action) => {
