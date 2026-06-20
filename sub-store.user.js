@@ -3,7 +3,7 @@
 // @name:zh-CN   Sub-Store 通用无障碍增强
 // @name:en      Sub-Store Universal Accessibility
 // @namespace    sub-store-universal-a11y
-// @version      1.0.30
+// @version      1.0.31
 // @description  为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:zh-CN 为任意域名部署的 Sub-Store 提供无障碍增强，不读取或保存 API 凭证。
 // @description:en Improve accessibility for Sub-Store deployments on any domain without reading or storing API credentials.
@@ -323,7 +323,9 @@
     if (element.classList.contains('compare-sub-link')) {
       if (element.querySelector('svg[data-icon="square-arrow-up-right"]')) return '打开订阅服务页面';
       if (element.querySelector('svg[data-icon="eye"]')) return '生成节点对比';
-      return element.querySelector('svg[data-icon="angle-right"]') ? '收起更多操作' : '展开更多操作';
+      return element.querySelector('svg[data-icon="angle-right"]')
+        ? '隐藏编辑分享和复制订阅链接操作'
+        : '显示编辑分享和复制订阅链接操作';
     }
     if (element.classList.contains('copy-sub-link') && element.querySelector('svg[data-icon="clone"]')) return '复制订阅链接';
     if (element.querySelector('svg[data-icon="angles-right"]')) {
@@ -633,7 +635,7 @@
       if (!control.querySelector('svg[data-icon="ellipsis"], svg[data-icon="ellipsis-vertical"], svg[data-icon="angle-right"]')) return;
       const expanded = Boolean(control.querySelector('svg[data-icon="angle-right"]'));
       control.setAttribute('aria-expanded', String(expanded));
-      setControlLabel(control, expanded ? '收起更多操作' : '展开更多操作');
+      setControlLabel(control, expanded ? '隐藏编辑分享和复制订阅链接操作' : '显示编辑分享和复制订阅链接操作');
     });
     root.querySelectorAll('button:has(svg[data-icon="angles-right"])').forEach((control) => {
       const expanded = isSubscriptionDrawerExpanded(control);
