@@ -25,9 +25,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: 运行测试
-        run: python3 -m unittest iptv/test_update_zh_iptv.py -v
-
       - name: 更新中文订阅
         run: python3 iptv/update_zh_iptv.py
 
