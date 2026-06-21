@@ -99,7 +99,8 @@ def _translated_suffix(title: str) -> str:
 
 
 def _assert_chinese_visible(value: str, context: str) -> None:
-    if ASCII_LETTER.search(value):
+    value_without_allowed_brand = value.replace("CCTV", "")
+    if ASCII_LETTER.search(value_without_allowed_brand):
         raise LocalizationError(f"{context}仍包含英文字母：{value}")
 
 
@@ -134,7 +135,11 @@ def localize_playlist(
         _assert_chinese_visible(chinese_name, channel_id)
 
         attributes, upstream_title = line.rsplit(",", 1)
-        chinese_group = _translate_groups(group_match.group(1))
+        chinese_group = (
+            "CCTV"
+            if channel_id.startswith("CCTV")
+            else _translate_groups(group_match.group(1))
+        )
         _assert_chinese_visible(chinese_group, f"{channel_id} 分组")
         attributes = re.sub(
             r'group-title="[^"]+"',

@@ -20,13 +20,13 @@ class LocalizePlaylistTests(unittest.TestCase):
         result = localize_playlist(
             SAMPLE,
             channels={},
-            names={"CCTV1.cn": "央视一套综合"},
+            names={"CCTV1.cn": "CCTV-1 综合频道"},
         )
 
         self.assertIn('tvg-id="CCTV1.cn@HD"', result)
         self.assertIn('tvg-logo="https://img.example/cctv.png"', result)
-        self.assertIn('group-title="综合;新闻"', result)
-        self.assertIn(',央视一套综合（全高清）[有地区限制]', result)
+        self.assertIn('group-title="CCTV"', result)
+        self.assertIn(',CCTV-1 综合频道（全高清）[有地区限制]', result)
         self.assertIn("https://stream.example/live/cctv1.m3u8", result)
 
     def test_uses_database_chinese_alias_when_curated_name_is_absent(self):
@@ -55,12 +55,12 @@ class LocalizePlaylistTests(unittest.TestCase):
 
         self.assertIn(",中天综合台（高清）", result)
 
-    def test_rejects_english_left_in_curated_visible_name(self):
+    def test_rejects_english_other_than_cctv_brand(self):
         with self.assertRaisesRegex(LocalizationError, "英文字母"):
             localize_playlist(
                 SAMPLE,
                 channels={},
-                names={"CCTV1.cn": "CCTV一套"},
+                names={"CCTV1.cn": "CCTV News频道"},
             )
 
     def test_failed_localization_does_not_replace_published_file(self):

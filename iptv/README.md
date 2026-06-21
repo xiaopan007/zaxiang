@@ -1,6 +1,6 @@
 # IPTV 中文频道订阅
 
-这是 [iptv-org/iptv](https://github.com/iptv-org/iptv) 中文频道播放列表 `languages/zho.m3u` 的中文名称派生版本，包含中国大陆、港澳台及海外中文频道。频道名称、频道分组、清晰度和状态提示已经中文化；频道标识、台标和直播地址保持上游原值。
+这是 [iptv-org/iptv](https://github.com/iptv-org/iptv) 中文频道播放列表 `languages/zho.m3u` 的中文名称派生版本，包含中国大陆、港澳台及海外中文频道。除 `CCTV` 品牌名称外，频道名称、频道分组、清晰度和状态提示已经中文化；所有 CCTV 频道统一归入 `CCTV` 分组。频道标识、台标和直播地址保持上游原值。
 
 ## 订阅地址
 
