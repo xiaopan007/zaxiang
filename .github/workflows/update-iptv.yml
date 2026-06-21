@@ -15,7 +15,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: 检出仓库
         uses: actions/checkout@v7
@@ -28,15 +28,51 @@ jobs:
       - name: 更新中文订阅
         run: python3 iptv/update_zh_iptv.py
 
+      - name: 配置 Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: 获取官方节目单工具
+        run: git clone --depth 1 --branch master https://github.com/iptv-org/epg.git "$RUNNER_TEMP/iptv-org-epg"
+
+      - name: 安装节目单工具依赖
+        working-directory: ${{ runner.temp }}/iptv-org-epg
+        run: npm ci
+
+      - name: 生成中文抓取配置
+        run: |
+          python3 iptv/update_epg.py prepare \
+            --epg-dir "$RUNNER_TEMP/iptv-org-epg" \
+            --playlist iptv/zho.m3u \
+            --output "$RUNNER_TEMP/channels.xml"
+
+      - name: 抓取三天中文节目单
+        working-directory: ${{ runner.temp }}/iptv-org-epg
+        run: |
+          npm run grab --- \
+            --channels="$RUNNER_TEMP/channels.xml" \
+            --output="$RUNNER_TEMP/guide.xml" \
+            --days=3 \
+            --maxConnections=5
+
+      - name: 整理并验证中文节目单
+        run: |
+          python3 iptv/update_epg.py finalize \
+            --guide "$RUNNER_TEMP/guide.xml" \
+            --playlist iptv/zho.m3u \
+            --output iptv/epg.xml.gz \
+            --min-programmes=100
+
       - name: 提交变化
         shell: bash
         run: |
-          if git diff --quiet -- iptv/zho.m3u; then
-            echo "订阅内容没有变化"
+          if git diff --quiet --exit-code -- iptv/zho.m3u iptv/epg.xml.gz; then
+            echo "订阅和节目单内容没有变化"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add iptv/zho.m3u
-          git commit -m "chore: update Chinese IPTV playlist"
+          git add iptv/zho.m3u iptv/epg.xml.gz
+          git commit -m "chore: update Chinese IPTV playlist and EPG"
           git push

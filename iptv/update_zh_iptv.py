@@ -12,6 +12,7 @@ from typing import Dict, Iterable, Mapping
 
 SOURCE_URL = "https://iptv-org.github.io/iptv/languages/zho.m3u"
 CHANNELS_URL = "https://iptv-org.github.io/api/channels.json"
+EPG_URL = "https://raw.githubusercontent.com/xiaopan007/zaxiang/main/iptv/epg.xml.gz"
 ASCII_LETTER = re.compile(r"[A-Za-z]")
 HAN_CHARACTER = re.compile(r"[\u3400-\u9fff]")
 
@@ -116,6 +117,9 @@ def localize_playlist(
     output = []
     entry_count = 0
     for line in m3u_text.splitlines():
+        if line.startswith("#EXTM3U"):
+            output.append(f'#EXTM3U url-tvg="{EPG_URL}"')
+            continue
         if not line.startswith("#EXTINF"):
             output.append(line)
             continue

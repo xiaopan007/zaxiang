@@ -1,4 +1,4 @@
-#EXTM3U
+#EXTM3U url-tvg="https://raw.githubusercontent.com/xiaopan007/zaxiang/main/iptv/epg.xml.gz"
 #EXTINF:-1 tvg-id="8TV.my@SD" tvg-logo="https://i.imgur.com/Jkx9W88.png" group-title="综艺",八度空间
 http://cdn6.163189.xyz/163189/8tv
 #EXTINF:-1 tvg-id="ABNChina.us@SD" tvg-logo="https://i.imgur.com/zagVLQH.png" group-title="宗教",阿拉姆广播网中国频道（高清）
