@@ -1,0 +1,45 @@
+name: 更新 IPTV 中文频道订阅
+
+on:
+  schedule:
+    - cron: "20 22 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-chinese-iptv
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 运行测试
+        run: python3 -m unittest iptv/test_update_zh_iptv.py -v
+
+      - name: 更新中文订阅
+        run: python3 iptv/update_zh_iptv.py
+
+      - name: 提交变化
+        shell: bash
+        run: |
+          if git diff --quiet -- iptv/zho.m3u; then
+            echo "订阅内容没有变化"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add iptv/zho.m3u
+          git commit -m "chore: update Chinese IPTV playlist"
+          git push
