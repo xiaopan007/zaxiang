@@ -99,6 +99,12 @@ def _translated_suffix(title: str) -> str:
     return "".join(parts)
 
 
+def _upstream_title_without_suffix(title: str) -> str:
+    title = re.sub(r"\s*\(\d+[pi]\)", "", title)
+    title = re.sub(r"\s*\[[^]]*\]", "", title)
+    return title.strip()
+
+
 def _assert_chinese_visible(value: str, context: str) -> None:
     value_without_allowed_brand = value.replace("CCTV", "")
     if ASCII_LETTER.search(value_without_allowed_brand):
@@ -131,14 +137,19 @@ def localize_playlist(
 
         feed_id = id_match.group(1)
         channel_id = feed_id.split("@", 1)[0]
+        attributes, upstream_title = line.rsplit(",", 1)
         chinese_name = names.get(channel_id) or _chinese_alias(
             indexed_channels.get(channel_id, {})
         )
-        if not chinese_name:
-            raise LocalizationError(f"频道缺少中文名称：{channel_id}")
-        _assert_chinese_visible(chinese_name, channel_id)
+        allow_english_title = False
+        if chinese_name:
+            _assert_chinese_visible(chinese_name, channel_id)
+        else:
+            chinese_name = _upstream_title_without_suffix(upstream_title)
+            allow_english_title = True
+            if not chinese_name:
+                raise LocalizationError(f"频道缺少可用名称：{channel_id}")
 
-        attributes, upstream_title = line.rsplit(",", 1)
         chinese_group = (
             "CCTV"
             if channel_id.startswith("CCTV")
@@ -151,7 +162,8 @@ def localize_playlist(
             attributes,
         )
         chinese_title = chinese_name + _translated_suffix(upstream_title)
-        _assert_chinese_visible(chinese_title, channel_id)
+        if not allow_english_title:
+            _assert_chinese_visible(chinese_title, channel_id)
         output.append(f"{attributes},{chinese_title}")
         entry_count += 1
 
