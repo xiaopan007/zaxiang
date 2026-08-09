@@ -107,6 +107,10 @@ https://d3e05csss9c272.cloudfront.net/out/v1/f0bf71c57581470fb9379f603e8f5d83/CG
 https://amg00405-rakutentv-cgtn-rakuten-i9tar.amagi.tv/master.m3u8
 #EXTINF:-1 tvg-id="CGTNGlobalBiz.cn@SD" tvg-logo="https://i.imgur.com/qBmomnF.png" group-title="财经",中国环球电视网环球财经频道（全高清）
 https://amg01314-amg01314c6-distrotv-us-10220.playouts.now.amagi.tv/playlist/amg01314-cgtn-cgtnglobalbiz-distrotvus/playlist.m3u8
+#EXTINF:-1 tvg-id="Channel8.sg@SD" tvg-logo="https://i.imgur.com/6YPZc24.png" group-title="综合",新传媒八频道（高清）
+https://cdn.qd.je/163189/ch8
+#EXTINF:-1 tvg-id="ChannelU.sg@SD" tvg-logo="https://i.imgur.com/9MzEjoY.png" group-title="综艺",新传媒优频道（高清）
+https://cdn.qd.je/163189/chu
 #EXTINF:-1 tvg-id="ChinaTravel.cn@SD" tvg-logo="https://i.imgur.com/vSgY3CD.png" group-title="文化;纪录;旅游",中国旅游频道（全高清）
 https://amg01314-amg01314c7-distrotv-us-10219.playouts.now.amagi.tv/playlist/amg01314-cgtn-cgtnchinatravel-distrotvus/playlist.m3u8
 #EXTINF:-1 tvg-id="CNDFilmMiddleSchoolChannel.cn@SD" tvg-logo="https://i.imgur.com/4uG8HsQ.png" group-title="电影",中央新影-中学生
