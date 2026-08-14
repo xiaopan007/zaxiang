@@ -155,6 +155,8 @@ https://online.godstands.tv:5443/WebRTCApp/streams/chineselive.m3u8
 https://live.streamingfast.net/osmflivech1.m3u8
 #EXTINF:-1 tvg-id="Good2.tw@SD" tvg-logo="https://i.imgur.com/YxFRoft.png" group-title="宗教",好消息电视台真理频道（高清）
 https://live.streamingfast.net/osmflivech2.m3u8
+#EXTINF:-1 tvg-id="GuangdongSatelliteTV.cn@SD" tvg-logo="https://parco-zh.github.io/demo/guangdong.jpg" group-title="未分类",广东卫视
+https://h5cul1yar48um3t.wcetv.com/hls/gdsatellite.m3u8
 #EXTINF:-1 tvg-id="GuangdongTVAmerica.us@SD" tvg-logo="https://i.imgur.com/7J4qGjA.png" group-title="综合",Guangdong TV America
 https://h5cul1yar48um3t.wcetv.com/hls/gdtv.m3u8
 #EXTINF:-1 tvg-id="GuangzhouTV.cn@SD" tvg-logo="https://i.imgur.com/ff3KQXp.png" group-title="综合",广州广播电视台
@@ -289,8 +291,6 @@ https://h5cul1yar48um3t.wcetv.com/hls/wcetv318.m3u8
 https://klmysjtzb.rcsxzx.com/hls/klmy2.m3u8
 #EXTINF:-1 tvg-id="ZhejiangInternationalChannel.cn@SD" tvg-logo="https://i.imgur.com/XOL1Hph.png" group-title="未分类",浙江电视台国际频道
 https://ali-m-l.cztv.com/channels/lantian/channel10/1080p.m3u8
-#EXTINF:-1 tvg-id="DragonTV.cn@SD" tvg-logo="https://i.imgur.com/WqM6xnF.png" group-title="综合",东方卫视（超高清）
-http://118.81.195.79:9003/hls/23/index.m3u8
 #EXTINF:-1 tvg-id="ChinaWeatherChannel.cn@SD" tvg-logo="https://i.imgur.com/syNwDpg.png" group-title="气象",中国气象频道（576逐行）[非全天播出]
 http://hls.weathertv.cn/tslslive/qCFIfHB/hls/live_sd.m3u8
 #EXTINF:-1 tvg-id="YunnanSatelliteTV.cn@SD" tvg-logo="https://www.tvchinese.net/uploads/tv/yunnantv.jpg" group-title="综合",云南卫视（全高清）
@@ -311,8 +311,6 @@ http://14.152.88.77/liveplay-kk.rtxapp.com/live/program/live/bjwshd/4000000/mnf.
 http://125.210.152.18:9090/live/FXZL_750.m3u8
 #EXTINF:-1 tvg-id="TTV.tw@SD" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/3/32/TTV_2nd_logo.svg/960px-TTV_2nd_logo.svg.png" group-title="未分类",台湾电视台（高清）
 http://162.19.247.76:22222/live/taishi/index.m3u8
-#EXTINF:-1 tvg-id="JilinSatelliteTV.cn@SD" tvg-logo="https://www.tvchinese.net/uploads/tv/jilintv.jpg" group-title="综合",吉林卫视（超高清）
-http://118.81.195.79:9003/hls/34/index.m3u8
 #EXTINF:-1 tvg-id="HezhengTV.cn@SD" tvg-logo="https://upload.wikimedia.org/wikipedia/zh/2/28/%E7%94%98%E8%82%83%E5%8D%AB%E8%A7%86.png" group-title="综合",和政电视台
 http://117.156.28.119/270000001111/1110000149/index.m3u8
 #EXTINF:-1 tvg-id="WXTV.tw@SD" tvg-logo="https://i.imgur.com/s8tiTeb.png" group-title="宗教",唯心电视台（480逐行）
@@ -343,12 +341,6 @@ http://livealone302.iqilu.com/iqilu/shpd.m3u8
 http://livealone302.iqilu.com/iqilu/zypd.m3u8
 #EXTINF:-1 tvg-id="ShandongTVQiluChannel.cn@SD" tvg-logo="https://i.imgur.com/U9wNMmm.png" group-title="未分类",山东齐鲁频道（全高清）[有地区限制]
 http://livealone302.iqilu.com/iqilu/qlpd.m3u8
-#EXTINF:-1 tvg-id="ShanxiTV.cn@SD" tvg-logo="https://i.imgur.com/UfKJBWW.png" group-title="未分类",山西卫视（超高清）
-http://118.81.195.79:9003/hls/19/index.m3u8
-#EXTINF:-1 tvg-id="GuangdongSatelliteTV.cn@SD" tvg-logo="https://parco-zh.github.io/demo/guangdong.jpg" group-title="未分类",广东卫视（超高清）
-http://118.81.195.79:9003/hls/26/index.m3u8
-#EXTINF:-1 tvg-id="GuangxiTV.cn@SD" tvg-logo="https://i.imgur.com/dpre5Qs.png" group-title="综合",广西卫视（576逐行）
-http://118.81.195.79:9003/hls/27/index.m3u8
 #EXTINF:-1 tvg-id="YanbianSatelliteTV.cn@SD" tvg-logo="https://i.imgur.com/UKKsnhD.png" group-title="未分类",延边卫视（高清）[非全天播出]
 http://scgctvshow.sctv.com/hdlive/kangba/1.m3u8
 #EXTINF:-1 tvg-id="XuzhouEconomicLifeChannel.cn@SD" tvg-logo="" group-title="财经",徐州经济生活频道（全高清）
@@ -371,14 +363,8 @@ http://223.110.245.151/ott.js.chinamobile.com/PLTV/3/224/3221225923/index.m3u8
 http://183.207.248.71/gitv/live1/G_JSZY/G_JSZY
 #EXTINF:-1 tvg-id="JiangxiTV.cn@SD" tvg-logo="https://i.imgur.com/RrLthH3.png" group-title="未分类",江西卫视（全高清）
 http://39.134.115.163:8080/PLTV/88888910/224/3221225705/index.m3u8
-#EXTINF:-1 tvg-id="HenanTVSatellite.cn@SD" tvg-logo="https://i.imgur.com/IBW26kV.png" group-title="未分类",河南卫视（超高清）
-http://118.81.195.79:9003/hls/30/index.m3u8
 #EXTINF:-1 tvg-id="ZhejiangSatelliteTV.cn@SD" tvg-logo="https://i.imgur.com/NFFQNhq.png" group-title="未分类",浙江卫视（全高清）
 http://39.134.115.163:8080/PLTV/88888910/224/3221225703/index.m3u8
-#EXTINF:-1 tvg-id="HainanSatelliteTV.cn@SD" tvg-logo="https://i.imgur.com/j6kY8nh.png" group-title="未分类",海南卫视（576逐行）
-http://118.81.195.79:9003/hls/28/index.m3u8
-#EXTINF:-1 tvg-id="HubeiSatelliteTV.cn@SD" tvg-logo="https://i.imgur.com/CTRa9BJ.png" group-title="未分类",湖北卫视（全高清）
-http://118.81.195.79:9003/hls/32/index.m3u8
 #EXTINF:-1 tvg-id="ChuzhouPublicChannel.cn@SD" tvg-logo="https://i.imgur.com/9JfZJRv.png" group-title="综合",滁州公共频道（400逐行）
 http://live.cztv.cc:85/live/ggpd.m3u8
 #EXTINF:-1 tvg-id="ChuzhouNewsChannel.cn@SD" tvg-logo="https://i.imgur.com/9JfZJRv.png" group-title="新闻",滁州新闻综合频道（全高清）
@@ -403,8 +389,6 @@ http://183.207.248.71/gitv/live1/G_GUIZHOU/G_GUIZHOU
 http://39.134.39.37/PLTV/88888888/224/3221226209/index.m3u8
 #EXTINF:-1 tvg-id="JiuquanTVNewsComprehensiveChannel.cn@SD" tvg-logo="https://i.imgur.com/mPkG8Gi.png" group-title="新闻",酒泉新闻综合频道（576逐行）
 http://117.156.28.119/270000001111/1110000001/index.m3u8
-#EXTINF:-1 tvg-id="ChongqingTVInternational.cn@SD" tvg-logo="https://i.imgur.com/ggKci6o.png" group-title="未分类",重庆卫视国际频道（全高清）
-http://118.81.195.79:9003/hls/22/index.m3u8
 #EXTINF:-1 tvg-id="GoldenEagleCartoon.cn@SD" tvg-logo="https://i.imgur.com/xfVHrKQ.png" group-title="动画;少儿",金鹰卡通频道（576逐行）
 http://223.110.245.145/ott.js.chinamobile.com/PLTV/3/224/3221226303/index.m3u8
 #EXTINF:-1 tvg-id="HunanWomensChannel.cn@SD" tvg-logo="https://www.tvchinese.net/uploads/tv/csnxpd.jpg" group-title="生活",长沙女性频道[有地区限制]
@@ -421,5 +405,5 @@ http://183.207.248.71/cntv/live1/fengshanggw/fengshanggw
 http://117.156.28.119/270000001111/1110000146/index.m3u8
 #EXTINF:-1 tvg-id="HebiNewsChannel.cn@SD" tvg-logo="https://i.imgur.com/Osw5yRW.png" group-title="新闻",鹤壁新闻综合频道（480逐行）[非全天播出]
 http://pili-live-hls.hebitv.com/hebi/hebi.m3u8
-#EXTINF:-1 tvg-id="HeilongjiangTV.cn@SD" tvg-logo="https://i.imgur.com/9fj1uba.png" group-title="综合",黑龙江卫视（超高清）
-http://118.81.195.79:9003/hls/31/index.m3u8
+#EXTINF:-1 tvg-id="HeilongjiangTV.cn@SD" tvg-logo="https://i.imgur.com/9fj1uba.png" group-title="综合",黑龙江卫视（全高清）
+http://223.110.245.161/ott.js.chinamobile.com/PLTV/3/224/3221227492/index.m3u8
