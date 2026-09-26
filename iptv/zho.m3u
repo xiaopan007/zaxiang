@@ -122,6 +122,8 @@ https://fastlive.cctvplus.com/out/v1/2b3d8a0c805d437f9dc85b764c2ac599/index.m3u8
 https://cdn.qd.je/163189/ch8
 #EXTINF:-1 tvg-id="ChannelU.sg@SD" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Mediacorp_Channel_U_2023.svg/960px-Mediacorp_Channel_U_2023.svg.png" group-title="综艺",新传媒优频道（高清）
 https://cdn.qd.je/163189/chu
+#EXTINF:-1 tvg-id="ChaozhouPublicChannel.cn@SD" tvg-logo="https://i.imgur.com/8YIrgB7.png" group-title="综合",潮州公共
+http://113.64.146.48:1688/hls/4/index.m3u8
 #EXTINF:-1 tvg-id="CHCAction.cn@SD" tvg-logo="https://i.imgur.com/AuiVcyh.png" group-title="电影",动作电影频道（全高清）
 http://39.134.19.68/dbiptv.sn.chinamobile.com/PLTV/88888888/224/3221226465/index.m3u8
 #EXTINF:-1 tvg-id="CHCHomeTheater.cn@SD" tvg-logo="https://i.imgur.com/AwBldBE.png" group-title="未分类",家庭影院频道（全高清）
